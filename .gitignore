@@ -1,0 +1,28 @@
+# Bog'liqliklar va yig'ilgan fayllar — git'da saqlanmaydi.
+# Ular package.json dan qayta tiklanadi, lekin repo'ni yuzlab megabaytga shishiradi.
+node_modules/
+dist/
+dist-ssr/
+
+# TypeScript inkremental yig'ish keshi
+*.tsbuildinfo
+
+# Muhit o'zgaruvchilari. .env.example dan boshqa hech narsa kirmasin:
+# VITE_ bilan boshlanadigan qiymatlar brauzerga chiqadi, ya'ni ochiq bo'ladi.
+.env
+.env.*
+!.env.example
+*.local
+
+# Muharrir va OS fayllari
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Loglar
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,0 +1,213 @@
+/* ============================================================
+   NASLAI STUDIO — design tokens
+   Cream / Ink / Orange system (Space Grotesk + Manrope)
+   Имена переменных не менялись — вся вёрстка работает как раньше.
+   ============================================================ */
+:root {
+  color-scheme: light;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
+
+  /* --- поверхности кабинета --- */
+  --app-bg: #f4f0e8;
+  --surface-card: #fffdf7;
+  --surface-elevated: #ffffff;
+  --surface-control: #f4f0e8;
+  --surface-input: #fffdf7;
+  --border-subtle: rgba(20, 17, 16, 0.12);
+  --border-strong: rgba(20, 17, 16, 0.24);
+
+  /* --- текст --- */
+  --text-primary: #141110;
+  --text-strong: #141110;
+  --text-secondary: #7b756a;
+  --text-tertiary: #7b756a;
+  --text-disabled: #a9a296;
+
+  /* --- выделение --- */
+  --selected-bg: #141110;
+  --selected-ink: #f4f0e8;
+
+  /* --- акцент --- */
+  --accent: #ff4d1c;
+  --accent-strong: #e23c0f;
+  --accent-ink: #180b04;
+  --secondary-accent: #ff4d1c;
+  --accent-soft-text: #c0390f;
+  --accent-wash: rgba(255, 77, 28, 0.08);
+  --accent-border-alpha: rgba(255, 77, 28, 0.38);
+  --accent-transparent: rgba(255, 77, 28, 0);
+  --secondary-accent-glow: rgba(255, 77, 28, 0.35);
+
+  /* --- статусы --- */
+  --success: #1e8a5f;
+  --success-text: #1e8a5f;
+  --warning: #b8730a;
+  --danger: #d63a3a;
+  --danger-text: #c22b2b;
+  --danger-surface: rgba(214, 58, 58, 0.08);
+  --danger-border: rgba(214, 58, 58, 0.32);
+
+  /* --- вспомогательные поверхности --- */
+  --bg: #f4f0e8;
+  --surface-1: #fffdf7;
+  --surface-2: #ffffff;
+  --surface-3: #f4f0e8;
+  --border: rgba(20, 17, 16, 0.12);
+  --text: #141110;
+  --text-muted: #7b756a;
+  --pure-white: #ffffff;
+  --surface-footer: #fffdf7;
+  --surface-deep: #141110;
+  --surface-hover: #f0eae0;
+  --avatar-bg: #141110;
+  --provider-yandex: #ff3d22;
+
+  /* --- превью-макеты карточек (нейтральные, не тема) --- */
+  --preview-warm-light: #ece7df;
+  --preview-warm-mid: #c8a47f;
+  --preview-warm-dark: #5f3f2a;
+  --preview-neutral-1: #f5f5f5;
+  --preview-neutral-2: #e6e6e6;
+  --preview-neutral-3: #8b8b8b;
+  --preview-neutral-4: #494949;
+
+  /* --- сетки, стекло, тени --- */
+  --grid-line: rgba(20, 17, 16, 0.07);
+  --grid-line-strong: rgba(20, 17, 16, 0.09);
+  --header-glass: rgba(244, 240, 232, 0.9);
+  --profile-glass: rgba(255, 253, 247, 0.86);
+  --icon-glass: rgba(255, 253, 247, 0.9);
+  --dropzone-fill: rgba(244, 240, 232, 0.6);
+  --overlay: rgba(20, 17, 16, 0.55);
+  --modal-overlay: rgba(20, 17, 16, 0.42);
+  --shadow-soft: rgba(20, 17, 16, 0.1);
+  --shadow-medium: rgba(20, 17, 16, 0.16);
+  --shadow-strong: rgba(20, 17, 16, 0.22);
+  --shadow-deep: rgba(20, 17, 16, 0.28);
+  --white-alpha: rgba(20, 17, 16, 0.26);
+
+  /* --- лендинг / авторизация: остаётся тёмным (как в макете) --- */
+  --landing-bg: #141110;
+  --landing-line: rgba(244, 240, 232, 0.18);
+  --landing-line-soft: rgba(244, 240, 232, 0.08);
+  --landing-line-medium: rgba(244, 240, 232, 0.22);
+  --landing-line-strong: rgba(244, 240, 232, 0.32);
+  --landing-line-fine: rgba(244, 240, 232, 0.3);
+  --landing-white-soft: rgba(244, 240, 232, 0.68);
+  --landing-white-muted: rgba(244, 240, 232, 0.48);
+  --landing-white-faint: rgba(244, 240, 232, 0.42);
+  --landing-white-56: rgba(244, 240, 232, 0.56);
+  --landing-white-65: rgba(244, 240, 232, 0.65);
+  --landing-card: rgba(20, 17, 16, 0.68);
+  --landing-card-fill: rgba(244, 240, 232, 0.08);
+  --landing-glow: rgba(255, 168, 130, 0.96);
+  --landing-cyan: rgba(255, 77, 28, 0.84);
+  --landing-cyan-soft: rgba(255, 77, 28, 0.22);
+
+  /* --- текст на тёмных поверхностях (панель результатов, hero, лендинг) ---
+     Отдельно от --app-bg: в тёмной теме фон приложения тоже тёмный,
+     и использовать его как цвет текста нельзя. */
+  --on-deep-rgb: 244, 240, 232;
+  --on-deep: rgb(var(--on-deep-rgb));
+
+  /* --- радиусы (8px-сетка макета: 12 / 18 / 26) --- */
+  --radius-control: 12px;
+  --radius-card: 18px;
+  --radius-panel: 26px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ============================================================
+   ТЁМНАЯ ТЕМА — ключевой цвет #00F6FF
+   Включается атрибутом data-theme="dark" на <html>.
+   Переопределяются только значения: имена переменных те же,
+   поэтому вся вёрстка работает без единой правки разметки.
+   ============================================================ */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --app-bg: #0b0f11;
+  --surface-card: #121819;
+  --surface-elevated: #182122;
+  --surface-control: #0e1516;
+  --surface-input: #121819;
+  --border-subtle: rgba(242, 252, 253, 0.1);
+  --border-strong: rgba(242, 252, 253, 0.2);
+
+  --text-primary: #e8f7f9;
+  --text-strong: #ffffff;
+  --text-secondary: #8eabb2;
+  --text-tertiary: #7d979d;
+  --text-disabled: #566a6e;
+
+  /* В тёмной теме «выделенное» — не белая плашка (слепит), а приподнятая
+     поверхность; отличается от невыбранных за счёт акцентной рамки ниже. */
+  --selected-bg: #1b2c2f;
+  --selected-ink: #e8f7f9;
+
+  --accent: #00f6ff;
+  --accent-strong: #00a8b0;
+  --accent-ink: #001416;
+  --secondary-accent: #00f6ff;
+  --accent-soft-text: #6ef0f8;
+  --accent-wash: rgba(0, 246, 255, 0.09);
+  --accent-border-alpha: rgba(0, 246, 255, 0.38);
+  --accent-transparent: rgba(0, 246, 255, 0);
+  --secondary-accent-glow: rgba(0, 246, 255, 0.35);
+
+  --success: #38d996;
+  --success-text: #38d996;
+  --warning: #ffbe3d;
+  --danger: #ff5c70;
+  --danger-text: #ff95a2;
+  --danger-surface: rgba(255, 92, 112, 0.12);
+  --danger-border: rgba(255, 92, 112, 0.34);
+
+  --bg: #0b0f11;
+  --surface-1: #121819;
+  --surface-2: #182122;
+  --surface-3: #0e1516;
+  --border: rgba(242, 252, 253, 0.1);
+  --text: #e8f7f9;
+  --text-muted: #8eabb2;
+  --pure-white: #ffffff;
+  --surface-footer: #0e1516;
+  --surface-deep: #070c0d;
+  --surface-hover: #1b2426;
+  --avatar-bg: #182122;
+
+  --grid-line: rgba(242, 252, 253, 0.05);
+  --grid-line-strong: rgba(242, 252, 253, 0.07);
+  --header-glass: rgba(11, 15, 17, 0.85);
+  --profile-glass: rgba(18, 24, 25, 0.86);
+  --icon-glass: rgba(18, 24, 25, 0.9);
+  --dropzone-fill: rgba(14, 21, 22, 0.6);
+  --overlay: rgba(4, 8, 9, 0.68);
+  --modal-overlay: rgba(4, 8, 9, 0.6);
+  --shadow-soft: rgba(0, 0, 0, 0.3);
+  --shadow-medium: rgba(0, 0, 0, 0.42);
+  --shadow-strong: rgba(0, 0, 0, 0.52);
+  --shadow-deep: rgba(0, 0, 0, 0.6);
+  --white-alpha: rgba(242, 252, 253, 0.26);
+
+  --landing-bg: #071014;
+  --landing-line: rgba(242, 252, 253, 0.18);
+  --landing-line-soft: rgba(242, 252, 253, 0.08);
+  --landing-line-medium: rgba(242, 252, 253, 0.22);
+  --landing-line-strong: rgba(242, 252, 253, 0.32);
+  --landing-line-fine: rgba(242, 252, 253, 0.3);
+  --landing-white-soft: rgba(242, 252, 253, 0.68);
+  --landing-white-muted: rgba(242, 252, 253, 0.48);
+  --landing-white-faint: rgba(242, 252, 253, 0.42);
+  --landing-white-56: rgba(242, 252, 253, 0.56);
+  --landing-white-65: rgba(242, 252, 253, 0.65);
+  --landing-card: rgba(7, 16, 20, 0.68);
+  --landing-card-fill: rgba(242, 252, 253, 0.08);
+  --landing-glow: rgba(120, 245, 252, 0.96);
+  --landing-cyan: rgba(0, 246, 255, 0.84);
+  --landing-cyan-soft: rgba(0, 246, 255, 0.22);
+
+  --on-deep-rgb: 232, 247, 249;
+}
