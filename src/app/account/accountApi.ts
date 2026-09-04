@@ -18,6 +18,19 @@ export type AccountLedgerEntry = {
   createdAt: string;
 };
 
+/** Ikki tilli matn: Uzum'da ikkala maydon ham to'ldiriladi. */
+export type Bilingual = { uz: string; ru: string };
+
+export type ProductListing = {
+  title: Bilingual;
+  utp: Bilingual;
+  shortDescription: Bilingual;
+  fullDescription: Bilingual;
+  characteristics: Array<{ name: Bilingual; value: Bilingual }>;
+  keywords: { uz: string[]; ru: string[] };
+  notice: string;
+};
+
 export type AccountProject = {
   id: string;
   name: string;
@@ -28,6 +41,21 @@ export type AccountProject = {
   previewUrl?: string | null;
   resultCount?: number;
   available?: boolean;
+};
+
+/**
+ * Loyiha butunligicha: karta nimadan yig'ilgani va marketplace kartochkasiga
+ * qo'yiladigan matn.
+ */
+export type ProjectFolder = AccountProject & {
+  summary?: string;
+  contentType?: string;
+  sourceUrl: string | null;
+  archiveUrl: string;
+  brief: { title: string; subtitle: string; category: string; benefits: string[] } | null;
+  plan: { id: string; type: string; headline: string; subtitle: string; lines: string[] }[];
+  listing: ProductListing | null;
+  results: { id: string; title: string; previewUrl: string; downloadUrl: string; width: number; height: number }[];
 };
 
 export type AccountApiKey = {
@@ -106,7 +134,7 @@ export type AccountSnapshot = {
   /** 1 токен = 1 сгенерированная картинка. Все цены — производные от этого. */
   pricing: {
     perImage: number;
-    marketplacePackage: { flat: number; slides: number };
+    marketplacePackage: { perSlide: number; min: number; max: number };
     video: Record<"5" | "10", number>;
     tokenPriceUzs: number;
   };
@@ -171,6 +199,11 @@ export const accountApi = {
   get: () => request<AccountSnapshot>("/api/account"),
   updateProfile: (input: Pick<AccountUser, "name" | "email" | "language">) => request<AccountSnapshot>("/api/profile", { method: "PATCH", body: JSON.stringify(input) }),
   createApiKey: () => request<{ key: AccountApiKey; secret: string }>("/api/api-keys", { method: "POST", body: "{}" }),
+  /** Uzum uchun bepul tavsif — istalgan rasmdan, loyihasiz. */
+  generateListing: (input: { imageDataUrl: string; marketplace: string; hint: string }) =>
+    request<{ listing: ProductListing }>("/api/listing", { method: "POST", body: JSON.stringify(input) }),
+  project: (id: string) => request<{ project: ProjectFolder }>(`/api/projects/${encodeURIComponent(id)}`),
+  projectListing: (id: string) => request<{ listing: ProductListing }>(`/api/projects/${encodeURIComponent(id)}/listing`, { method: "POST", body: "{}" }),
   deleteProject: (id: string) => request<{ ok: boolean; projects: AccountProject[] }>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
   revokeApiKey: (id: string) => request<{ ok: boolean }>(`/api/api-keys/${encodeURIComponent(id)}`, { method: "DELETE" }),
   createOrder: (packId: string, provider: "click" | "payme") =>

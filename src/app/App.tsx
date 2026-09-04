@@ -4,6 +4,7 @@ import { AccountProvider, useAccount } from "./account/AccountContext";
 import { SocialAuth } from "./account/SocialAuth";
 import { ApiPage, BillingPage, HistoryPage, OfferPage, PrivacyPage, ProfilePage, ProjectsPage, ReferralsPage, TermsPage } from "./cabinet/CabinetPages";
 import { AuditPage } from "./cabinet/AuditPage";
+import { ListingPage } from "./cabinet/ListingPage";
 import { AdminPage } from "./admin/AdminPage";
 import { BrandMark } from "./BrandMark";
 import { WelcomeTour } from "./onboarding/WelcomeTour";
@@ -65,6 +66,7 @@ function AppContent() {
     : route === "terms" ? <TermsPage onNavigate={navigate} onLogout={signOut} />
     : route === "offer" ? <OfferPage onNavigate={navigate} onLogout={signOut} />
     : route === "audit" ? <AuditPage onNavigate={navigate} onLogout={signOut} />
+    : route === "listing" ? <ListingPage onNavigate={navigate} onLogout={signOut} />
     : route === "admin" ? <AdminPage onNavigate={navigate} onLogout={signOut} />
     : <ApiPage onNavigate={navigate} onLogout={signOut} />;
 

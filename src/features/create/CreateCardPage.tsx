@@ -269,7 +269,18 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
               : contentMode === "fashion" ? <FashionSettings settings={state.settings} disabled={disabled} onChange={updateSettings} />
               : contentMode === "copyStyle" ? <CopyStyleSettings settings={state.settings} disabled={disabled} onChange={updateSettings} />
               : contentMode === "marketplacePackage" ? <MarketplacePackageSettings brief={state.brief} settings={state.settings} disabled={disabled} onBriefChange={flow.updateBrief} onChange={updateSettings} />
-              : <CardSettings brief={state.brief} assets={state.assets} onPrimaryAssetChange={flow.setPrimaryAsset} settings={state.settings} disabled={disabled} advancedOpen={advancedOpen} onBriefChange={flow.updateBrief} onSettingsChange={updateSettings} onAdvancedToggle={() => setAdvancedOpen((open) => !open)} />}
+              : <CardSettings brief={state.brief} assets={state.assets} onPrimaryAssetChange={flow.setPrimaryAsset} onRebuildPlan={flow.rebuildPlan} settings={state.settings} disabled={disabled} advancedOpen={advancedOpen} onBriefChange={flow.updateBrief} onSettingsChange={updateSettings} onAdvancedToggle={() => setAdvancedOpen((open) => !open)} />}
+            {contentMode !== "video" && <label className="include-listing-toggle" aria-pressed={state.settings.includeListing}>
+              <input
+                className="sr-only"
+                type="checkbox"
+                disabled={disabled || isRunning}
+                checked={state.settings.includeListing}
+                onChange={(event) => updateSettings({ includeListing: event.target.checked })}
+              />
+              <span className="listing-toggle-box" aria-hidden="true" />
+              <span className="listing-toggle-text"><b>{t("create.includeListing.label")}</b><small>{t("create.includeListing.hint")}</small></span>
+            </label>}
             <div className="reference-primary-group">
               <button type="button" disabled={disabled || isRunning || !quote || !hasBalance} onClick={startGeneration}>{state.job.status === "submitting" ? t("generate.creatingTask") : hasBalance ? <>{t("generate.generate")} <b>{quote?.tokens ?? ""} {t("common.token")}</b></> : t("generate.insufficientTokens")}</button>
               {contentMode !== "marketplacePackage" && <>
@@ -300,7 +311,7 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
               </div>}
             </div>}
             {!hasBalance && quote && <p className="balance-warning">{t("generate.balanceWarning", { need: quote.tokens, have: state.balance })}</p>}
-            <p className="reference-summary">{contentMode === "video" ? `${t("create.summary.video")} · ${state.settings.video.duration} ${t("create.summary.seconds")}` : isPhoto ? `${t("create.summary.photo")} · ${marketplaceLabel(state.settings.marketplace)} · 1080×1440` : contentMode === "fashion" ? `Fashion AI · ${state.settings.fashion.gender === "none" ? "Flatlay" : state.settings.fashion.gender === "male" ? t("create.summary.fashionMale") : t("create.summary.fashionFemale")} · 1080×1440` : contentMode === "copyStyle" ? `${t("create.summary.copyStyle")} · 1080×1440 · ${t(`settings.language.options.${state.settings.language}`)}` : contentMode === "marketplacePackage" ? `${t("create.summary.marketplacePackage")} · ${t("create.summary.slides5")} · 1080×1440` : `${t("create.summary.card")} · ${state.settings.style === "commercial" ? t("create.summary.commercial") : t("create.summary.creative")} · ${marketplaceLabel(state.settings.marketplace)} · 1080×1440 · ${t(`settings.language.options.${state.settings.language}`)}`}</p>
+            <p className="reference-summary">{contentMode === "video" ? `${t("create.summary.video")} · ${state.settings.video.duration} ${t("create.summary.seconds")}` : isPhoto ? `${t("create.summary.photo")} · ${marketplaceLabel(state.settings.marketplace)} · 1080×1440` : contentMode === "fashion" ? `Fashion AI · ${state.settings.fashion.gender === "none" ? "Flatlay" : state.settings.fashion.gender === "male" ? t("create.summary.fashionMale") : t("create.summary.fashionFemale")} · 1080×1440` : contentMode === "copyStyle" ? `${t("create.summary.copyStyle")} · 1080×1440 · ${t(`settings.language.options.${state.settings.language}`)}` : contentMode === "marketplacePackage" ? `${t("create.summary.marketplacePackage")} · ${t("create.summary.slidesCount", { count: state.settings.packageSlides })} · 1080×1440` : `${t("create.summary.card")} · ${state.settings.style === "commercial" ? t("create.summary.commercial") : t("create.summary.creative")} · ${marketplaceLabel(state.settings.marketplace)} · 1080×1440 · ${t(`settings.language.options.${state.settings.language}`)}`}</p>
           </article>
           </>}
 
@@ -324,7 +335,7 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
         </div>
 
         <ResultShell>
-          <ResultPanel job={state.job} contentType={state.settings.contentType} onGenerate={startGeneration} onDownload={flow.download} onEditSettings={() => setActiveStep(2)} onNewProject={createProject} onRate={(value) => { if (value <= 3) setHelpOpen(true); }} onCancel={state.job.id ? cancelGeneration : undefined} cancelling={cancelling} />
+          <ResultPanel job={state.job} contentType={state.settings.contentType} onGenerate={startGeneration} onDownload={flow.download} onEditSettings={() => setActiveStep(2)} onNewProject={createProject} onRate={(value) => { if (value <= 3) setHelpOpen(true); }} onCancel={state.job.id ? cancelGeneration : undefined} cancelling={cancelling} onRegenerateSlide={(variant, note) => void flow.regenerateSlide(variant, note)} onComposeSlide={(variant, dataUrl) => flow.composeSlide(variant, dataUrl)} onRetryListing={flow.retryListing} />
         </ResultShell>
       </div>
     </section>

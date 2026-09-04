@@ -4,7 +4,12 @@ import type { GenerationSettings, InfographicLanguage, Marketplace, ProductAsset
 import { useLanguage } from "../../../i18n/LanguageContext";
 import { prepareImageDataUrl } from "../domain/prepareImage";
 import { Hint } from "./Hint";
+import { TextPlan } from "./TextPlan";
+import { STYLE_PRESETS } from "../domain/stylePresets";
+import type { SlidePlan } from "../domain/types";
 import { MAX_UPLOAD_BYTES } from "../domain/uploadLimits";
+import { useStyleTemplateSamples } from "../hooks/useStyleTemplateSamples";
+import { StyleTemplateGallery } from "./StyleTemplateGallery";
 
 type Props = {
   brief: ProductBrief;
@@ -17,6 +22,8 @@ type Props = {
   onAdvancedToggle: () => void;
   /** Sahifa 02 da asos fotoni almashtirish (qayta AI tahlilisiz). */
   onPrimaryAssetChange: (assetId: string) => void;
+  /** Matn rejasini qayta hisoblash. Bepul va tez: model chaqirilmaydi. */
+  onRebuildPlan: () => Promise<SlidePlan[] | null>;
 };
 
 const marketplaceOptions: Marketplace[] = ["uzum", "wb", "ozon"];
@@ -27,11 +34,16 @@ const languageOptions: Array<{ value: InfographicLanguage; description: string }
   { value: "tg", description: "Kirill" },
 ];
 
-export function CardSettings({ brief, assets, settings, disabled, advancedOpen, onBriefChange, onSettingsChange, onAdvancedToggle, onPrimaryAssetChange }: Props) {
+export function CardSettings({ brief, assets, settings, disabled, advancedOpen, onBriefChange, onSettingsChange, onAdvancedToggle, onPrimaryAssetChange, onRebuildPlan }: Props) {
   const { t } = useLanguage();
   const referenceInputRef = useRef<HTMLInputElement>(null);
   const [referenceError, setReferenceError] = useState("");
   const [promptNotice, setPromptNotice] = useState("");
+  const styleSamples = useStyleTemplateSamples();
+  // "Studiya" pastda yo'q edi — 130 shablon orasida bironta studio misoli
+  // topilmadi. O'sha o'rniga to'g'ridan-to'g'ri tayyor shablonlar galereyasi:
+  // tanlangan rasm shu yerdan ham dizayn referensi sifatida ishlatiladi.
+  const [templateGalleryOpen, setTemplateGalleryOpen] = useState(false);
   useEffect(() => {
     if (!promptNotice) return;
     const timer = window.setTimeout(() => setPromptNotice(""), 3_000);
@@ -126,6 +138,91 @@ export function CardSettings({ brief, assets, settings, disabled, advancedOpen, 
       <i>{textValue.length}/5000</i>
       {promptNotice && <small className="prompt-notice" role="status">{promptNotice}</small>}
     </label>
+
+    {/* Галерея стилей. Показывается, только пока не загружен свой
+        референс: два источника оформления противоречили бы друг другу,
+        и сервер в этом случае всё равно слушает референс. */}
+    {!settings.designReferenceUrl && <section className="style-gallery">
+      <p>{t("settings.styles.legend")}<Hint text={t("hints.stylePreset")} label={t("hints.aria")} /></p>
+      <div className="style-grid">
+        <button
+          type="button"
+          className={`style-tile ${settings.stylePreset === "" ? "is-active" : ""}`}
+          disabled={disabled}
+          aria-pressed={settings.stylePreset === ""}
+          onClick={() => onSettingsChange({ stylePreset: "" })}
+        >
+          <span className="style-swatch is-auto">✦</span>
+          <small>{t("settings.styles.auto")}</small>
+        </button>
+        {STYLE_PRESETS.map((preset) => {
+          const sample = styleSamples[preset.id];
+          return <button
+            key={preset.id}
+            type="button"
+            className={`style-tile ${settings.stylePreset === preset.id ? "is-active" : ""}`}
+            disabled={disabled}
+            aria-pressed={settings.stylePreset === preset.id}
+            onClick={() => onSettingsChange({ stylePreset: preset.id })}
+          >
+            {sample ? <span className="style-swatch has-photo" style={{ backgroundImage: `url("${sample}")` }}>
+              <em>{t("settings.styles.sampleBadge")}</em>
+            </span> : <span
+              className="style-swatch"
+              style={{ background: `linear-gradient(135deg, ${preset.palette[0]} 0 55%, ${preset.palette[2]} 55% 100%)` }}
+            >
+              <i style={{ background: preset.palette[1] }} />
+            </span>}
+            <small>{t(`settings.styles.${preset.labelKey}`)}</small>
+          </button>;
+        })}
+        <button
+          type="button"
+          className={`style-tile style-tile-templates ${templateGalleryOpen ? "is-active" : ""}`}
+          disabled={disabled}
+          aria-pressed={templateGalleryOpen}
+          onClick={() => setTemplateGalleryOpen((value) => !value)}
+        >
+          <span className="style-swatch is-templates" aria-hidden="true">▦</span>
+          <small>{t("settings.styles.fromTemplates")}</small>
+        </button>
+      </div>
+      {templateGalleryOpen && <StyleTemplateGallery
+        disabled={disabled}
+        open={templateGalleryOpen}
+        onOpenChange={setTemplateGalleryOpen}
+        onSelect={({ url, name, dataUrl }) => {
+          if (settings.designReferenceUrl.startsWith("blob:")) URL.revokeObjectURL(settings.designReferenceUrl);
+          onSettingsChange({ designReferenceUrl: url, designReferenceName: name, designReferenceDataUrl: dataUrl });
+          setTemplateGalleryOpen(false);
+        }}
+      />}
+    </section>}
+
+    {/* План текста стоит сразу после блока преимуществ: человек написал
+        факты — и тут же видит, как они лягут на карточку. */}
+    <fieldset className="text-mode" disabled={disabled}>
+      <legend>{t("settings.textMode.legend")}</legend>
+      <div className="text-mode-options">
+        {(["ai", "own"] as const).map((mode) => <button
+          key={mode}
+          type="button"
+          aria-pressed={settings.textMode === mode}
+          onClick={() => onSettingsChange({ textMode: mode })}
+        >
+          <b>{t(`settings.textMode.${mode}`)}</b>
+          <small>{t(`settings.textMode.${mode}Hint`)}</small>
+        </button>)}
+      </div>
+    </fieldset>
+
+    <TextPlan
+      brief={brief}
+      settings={settings}
+      disabled={disabled}
+      onChange={(plan) => onSettingsChange({ plan })}
+      onRebuild={onRebuildPlan}
+    />
 
     {/* Пожелание по сцене — отдельно от блока преимуществ.
         То, что человек пишет выше, уходит НА карточку плашкой. Просьба

@@ -6,6 +6,7 @@ import { CabinetFooter, CabinetHeader } from "./CabinetHeader";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { BuyTokens } from "./BuyTokens";
 import { LEGAL_CONTENT, type LegalDoc } from "./legalContent";
+import { ProjectFolderView } from "./ProjectFolderView";
 
 type Props = { route: Exclude<CabinetRoute, "create">; onNavigate: (route: CabinetRoute) => void; onLogout?: () => void };
 
@@ -28,13 +29,13 @@ function EmptyState({ title, text, action, onAction }: { title: string; text: st
 export function ProjectsPage({ onNavigate, onLogout }: Omit<Props, "route">) {
   const { account, refresh } = useAccount();
   const { t } = useLanguage();
-  // Какой проект открыт во весь экран. Раньше список был чисто текстовым:
-  // человек не видел, что внутри, и не мог ни скачать, ни удалить.
+  // Какой проект открыт. Раньше открывалась только картинка во весь
+  // экран; теперь открывается папка целиком — фото, бриф, текст слайдов,
+  // описание для площадки и все картинки в одном месте.
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   if (!account) return null;
   const projects = account.projects;
-  const opened = projects.find((project) => project.id === openId) ?? null;
 
   const remove = async (id: string) => {
     if (!window.confirm(t("cabinet.projects.deleteConfirm"))) return;
@@ -57,14 +58,20 @@ export function ProjectsPage({ onNavigate, onLogout }: Omit<Props, "route">) {
     link.remove();
   };
 
+  if (openId) {
+    return <PageFrame route="projects" onNavigate={onNavigate} onLogout={onLogout} title={t("cabinet.projects.title")}>
+      <ProjectFolderView id={openId} onClose={() => setOpenId(null)} onDeleted={() => { setOpenId(null); void refresh(); }} />
+    </PageFrame>;
+  }
+
   return <PageFrame route="projects" onNavigate={onNavigate} onLogout={onLogout} title={t("cabinet.projects.title")}>
     {projects.length ? <div className="project-grid">
       {projects.map((project) => <article className="project-card" key={project.id}>
         <button
           type="button"
           className="project-preview"
-          onClick={() => project.previewUrl && setOpenId(project.id)}
-          disabled={!project.previewUrl}
+          onClick={() => setOpenId(project.id)}
+          disabled={!project.available}
           aria-label={project.name}
         >
           {project.previewUrl
@@ -84,14 +91,6 @@ export function ProjectsPage({ onNavigate, onLogout }: Omit<Props, "route">) {
         </div>
       </article>)}
     </div> : <EmptyState title={t("cabinet.projects.emptyTitle")} text={t("cabinet.projects.emptyText")} action={t("cabinet.projects.emptyAction")} onAction={() => onNavigate("create")} />}
-
-    {opened?.previewUrl && <div className="project-viewer" role="dialog" aria-label={opened.name} onClick={() => setOpenId(null)}>
-      <img src={opened.previewUrl} alt={opened.name} onClick={(event) => event.stopPropagation()} />
-      <div className="project-viewer-actions" onClick={(event) => event.stopPropagation()}>
-        <button className="button primary" type="button" onClick={() => download(opened)}>{t("cabinet.projects.download")}</button>
-        <button className="button secondary" type="button" onClick={() => setOpenId(null)}>{t("cabinet.projects.close")}</button>
-      </div>
-    </div>}
   </PageFrame>;
 }
 
@@ -114,7 +113,7 @@ function PriceList({ dark }: { dark?: boolean }) {
     [t("profileHub.priceImage"), p.perImage],
     [t("profileHub.priceVariant"), p.perImage],
     [t("profileHub.pricePage"), p.perImage],
-    [t("profileHub.pricePackage", { slides: p.marketplacePackage.slides }), p.marketplacePackage.flat],
+    [t("profileHub.pricePackage", { min: p.marketplacePackage.min, max: p.marketplacePackage.max }), p.marketplacePackage.perSlide],
   ];
   return <div className={`price-list ${dark ? "on-dark" : ""}`}>
     {rows.map(([label, tokens]) => {

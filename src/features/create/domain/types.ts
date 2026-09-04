@@ -32,6 +32,15 @@ export type ProductBrief = {
   aiNotice?: string;
 };
 
+/** Reja: kartada nima yozilishini oldindan ko'rsatadigan matn. */
+export type SlidePlan = {
+  id: string;
+  type: string;
+  headline: string;
+  subtitle: string;
+  lines: string[];
+};
+
 export type GenerationSettings = {
   contentType: ContentMode;
   marketplace: Marketplace;
@@ -43,13 +52,25 @@ export type GenerationSettings = {
   cardPrompt: string;
   /** Sahna tilagi: fon, muhit, rekvizit. Kartaga MATN bo'lib chiqmaydi. */
   sceneWish: string;
+  /** Odam tekshirgan matn rejasi. Bo'sh bo'lsa — server o'zi hisoblaydi. */
+  plan: SlidePlan[];
+  /** Galereyadan tanlangan uslub. O'z referensi bo'lsa — ishlatilmaydi. */
+  stylePreset: string;
+  /** Paketda nechta slayd bo'ladi: 3 dan 8 gacha. Har biri 1 token. */
+  packageSlides: number;
+  /** Har bir slaydning mavzusi. Bo'sh bo'lsa — server standart tartibni oladi. */
+  slideTypes: string[];
+  /** Matnni kim yozadi: "ai" — model, "own" — biz o'zimiz shrift bilan. */
+  textMode: "ai" | "own";
+  /** Karta tayyor bo'lgach, Uzum uchun tavsif ham yozilsinmi. Bepul, token yemaydi. */
+  includeListing: boolean;
   referenceMode: ReferenceMode;
   designReferenceUrl: string;
   designReferenceName: string;
   designReferenceDataUrl: string;
   aspectRatio: AspectRatio;
   resolution: Resolution;
-  variants: 1 | 2 | 4 | 5;
+  variants: 1 | 2 | 4 | 5 | 3 | 6 | 7 | 8;
   /** Nechta HAR XIL sahifa (slayd) generatsiya qilinadi. Variant bilan aralashtirmang:
    *  variant = bir xil sahifaning boshqa ko'rinishi, sahifa = boshqa kadr/mavzu. */
   pages: 1 | 2 | 3 | 4 | 5;
@@ -97,6 +118,24 @@ export type Quote = {
   breakdown: string;
 };
 
+type Bilingual = { uz: string; ru: string };
+
+/**
+ * Тавсиф для маркетплейса — заголовок, УТП, описания, характеристики и
+ * ключевые слова сразу на двух языках. Бесплатно, без списания токенов:
+ * та же логика, что и в отдельном разделе "Tavsif yozish", просто
+ * прицепленная к результату генерации, если продавец включил галочку.
+ */
+export type ProductListing = {
+  title: Bilingual;
+  utp: Bilingual;
+  shortDescription: Bilingual;
+  fullDescription: Bilingual;
+  characteristics: Array<{ name: Bilingual; value: Bilingual }>;
+  keywords: { uz: string[]; ru: string[] };
+  notice: string;
+};
+
 export type GenerationResult = {
   id: string;
   title: string;
@@ -110,6 +149,16 @@ export type GenerationResult = {
   /** На каком уровне промпта получена картинка: primary / retry-same /
    *  compact / style-descriptor / safe-minimal. */
   promptTier?: string | null;
+  /** Именно этот кадр сейчас перерисовывается. */
+  regenerating?: boolean;
+  /** Сколько раз кадр уже переделывали. */
+  regenerateCount?: number;
+  /** Пожелание, с которым его переделывали в прошлый раз. */
+  note?: string;
+  /** Текст для этого кадра, когда надписи рисуем мы, а не модель. */
+  slide?: { headline: string; subtitle: string; lines: string[] } | null;
+  /** Композиция с текстом уже сохранена в проект. */
+  composed?: boolean;
 };
 
 export type GenerationJob = {
@@ -120,6 +169,16 @@ export type GenerationJob = {
   quote: Quote | null;
   results: GenerationResult[];
   error: string | null;
+  /** Номер слайда, который сейчас перерисовывается. */
+  regenerating?: number | null;
+  /** Ошибка последней перерисовки. Вся задача при этом остаётся готовой. */
+  regenerateError?: string | null;
+  /** Кто пишет буквы на карточке. */
+  textMode?: "ai" | "own";
+  /** Тавсиф, если продавец включил галочку. Приходит отдельным запросом
+   *  уже после того, как карточка готова — сама генерация её не ждёт. */
+  listing?: ProductListing | null;
+  listingStatus?: "idle" | "loading" | "ready" | "failed";
   /** Сколько миллисекунд уже идёт генерация. Нужен для таймера ожидания. */
   elapsedMs?: number;
   context?: { title: string; category: string; summary: string; contentType: ContentMode };
@@ -161,6 +220,12 @@ export const defaultSettings: GenerationSettings = {
   photoPrompt: "",
   cardPrompt: "",
   sceneWish: "",
+  plan: [],
+  stylePreset: "",
+  packageSlides: 5,
+  slideTypes: ["main", "benefits", "usage", "sizes", "materials"],
+  textMode: "ai",
+  includeListing: false,
   referenceMode: "copy",
   designReferenceUrl: "",
   designReferenceName: "",

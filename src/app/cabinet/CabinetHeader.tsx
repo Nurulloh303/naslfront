@@ -62,6 +62,7 @@ export function CabinetHeader({ route, balance, onNavigate, onLogout }: Props) {
       <button type="button" aria-current={route === "create" ? "page" : undefined} onClick={() => onNavigate("create")}>{t("nav.createCard")}</button>
       <button type="button" className="header-create" onClick={() => onNavigate("create")}>{t("nav.newProject")}</button>
       <button type="button" aria-current={route === "projects" ? "page" : undefined} onClick={() => onNavigate("projects")}>{t("nav.allProjects")}</button>
+      <button type="button" className="nav-listing" aria-current={route === "listing" ? "page" : undefined} onClick={() => onNavigate("listing")}>{t("listing.nav")}</button>
       <button type="button" className="nav-audit" aria-current={route === "audit" ? "page" : undefined} onClick={() => onNavigate("audit")}>{t("audit.nav")}</button>
     </div>
     <ProfileMenu route={route} balance={balance} onNavigate={onNavigate} onLogout={onLogout} />

@@ -4,6 +4,7 @@ import { useLanguage } from "../../../i18n/LanguageContext";
 import { Hint } from "./Hint";
 import { prepareImageDataUrl } from "../domain/prepareImage";
 import { MAX_UPLOAD_BYTES } from "../domain/uploadLimits";
+import { StyleTemplateGallery } from "./StyleTemplateGallery";
 
 type Props = {
   settings: GenerationSettings;
@@ -52,6 +53,14 @@ export function CopyStyleSettings({ settings, disabled, onChange }: Props) {
         {referenceError && <small className="field-error" role="alert">{referenceError}</small>}
       </div>
       <small className="field-help">{t("settings.copyStyle.referenceHelp")}</small>
+      <StyleTemplateGallery
+        disabled={disabled}
+        onSelect={({ url, name, dataUrl }) => {
+          if (settings.designReferenceUrl.startsWith("blob:")) URL.revokeObjectURL(settings.designReferenceUrl);
+          onChange({ designReferenceUrl: url, designReferenceName: name, designReferenceDataUrl: dataUrl });
+          setReferenceError("");
+        }}
+      />
     </fieldset>
 
     {/* Til shu yerda ham turishi kerak: foydalanuvchi referens rus tilida

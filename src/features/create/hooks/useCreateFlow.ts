@@ -12,6 +12,7 @@ type Action =
   | { type: "QUOTE_READY"; quote: Quote | null }
   | { type: "BALANCE_SET"; balance: number }
   | { type: "JOB_UPDATE"; job: CreateFlowState["job"] }
+  | { type: "JOB_LISTING"; listing: CreateFlowState["job"]["listing"]; listingStatus: NonNullable<CreateFlowState["job"]["listingStatus"]> }
   | { type: "NOTICE"; notice: string | null }
   | { type: "RESET"; balance: number };
 
@@ -67,6 +68,7 @@ function reducer(state: CreateFlowState, action: Action): CreateFlowState {
     case "QUOTE_READY": return { ...state, job: { ...state.job, quote: action.quote } };
     case "BALANCE_SET": return { ...state, balance: action.balance };
     case "JOB_UPDATE": return { ...state, job: action.job };
+    case "JOB_LISTING": return { ...state, job: { ...state.job, listing: action.listing, listingStatus: action.listingStatus } };
     case "NOTICE": return { ...state, notice: action.notice };
     case "RESET": return makeInitialState(action.balance);
   }
@@ -81,6 +83,29 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
   const stopWatch = useRef<null | (() => void)>(null);
   const callbacks = useRef({ onBalanceChange, onJobSettled });
   callbacks.current = { onBalanceChange, onJobSettled };
+  // Решение "нужен ли тавсиф" принимается на шаге настроек, а не в момент,
+  // когда задача уже досчиталась — поэтому держим его в ref, а не читаем
+  // устаревший `state` из замыкания watch().
+  const includeListingRef = useRef(state.settings.includeListing);
+  includeListingRef.current = state.settings.includeListing;
+
+  /**
+   * Тавсиф для Uzum по готовой карточке.
+   *
+   * Бесплатно, поэтому не блокирует и не задерживает саму генерацию:
+   * запускается отдельным запросом ровно один раз, когда задача уже
+   * досчиталась и стоит галочка в настройках.
+   */
+  const fetchListing = async (jobId: string) => {
+    dispatch({ type: "JOB_LISTING", listing: null, listingStatus: "loading" });
+    try {
+      const listing = await api.listing(jobId);
+      dispatch({ type: "JOB_LISTING", listing, listingStatus: "ready" });
+    } catch (error) {
+      dispatch({ type: "JOB_LISTING", listing: null, listingStatus: "failed" });
+      dispatch({ type: "NOTICE", notice: error instanceof Error ? error.message : "Tavsifni yozib bo‘lmadi" });
+    }
+  };
 
   const watch = (jobId: string) => {
     stopWatch.current?.();
@@ -94,6 +119,7 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
         generationInFlight.current = false;
         sessionStorage.removeItem("naslai.activeJob");
         callbacks.current.onJobSettled?.();
+        if (job.status === "success" && includeListingRef.current) void fetchListing(jobId);
       }
     }, (message) => dispatch({ type: "NOTICE", notice: message }));
   };
@@ -165,6 +191,23 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
     dispatch({ type: "ASSETS_SET", assets: reordered });
   };
 
+  /**
+   * Пересобрать план текста по текущему брифу.
+   *
+   * Не трогаем существующий план сам по себе: правки человека важнее
+   * автоматики, перезапись делается только по его кнопке.
+   */
+  const rebuildPlan = async () => {
+    try {
+      const plan = await api.plan({ brief: state.brief, settings: state.settings });
+      dispatch({ type: "SETTINGS_CHANGE", settings: { ...state.settings, plan } });
+      return plan;
+    } catch (error) {
+      dispatch({ type: "NOTICE", notice: error instanceof Error ? error.message : "Rejani tuzib bo‘lmadi" });
+      return null;
+    }
+  };
+
   const setMarketplace = (marketplace: GenerationSettings["marketplace"]) => {
     dispatch({ type: "SETTINGS_CHANGE", settings: { ...state.settings, marketplace, aspectRatio: marketplacePresets[marketplace].defaultAspectRatio } });
   };
@@ -220,6 +263,71 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
     }
   };
 
+  /**
+   * Переделать один кадр.
+   *
+   * Раньше исправить один неудачный слайд можно было только перезапуском
+   * всей задачи: в пакете из восьми слайдов это восемь токенов ради
+   * одной картинки. Здесь списывается один, остальные остаются на месте.
+   *
+   * Пока кадр рисуется, задача остаётся "success": человек продолжает
+   * видеть и скачивать готовые слайды.
+   */
+  const regenerateSlide = async (variant: number, note: string) => {
+    const jobId = state.job.id;
+    if (!jobId || state.job.status !== "success" || state.job.regenerating) return false;
+    try {
+      const result = await api.regenerateSlide(jobId, variant, note);
+      dispatch({ type: "JOB_UPDATE", job: result.job });
+      dispatch({ type: "BALANCE_SET", balance: result.balance });
+      callbacks.current.onBalanceChange?.(result.balance);
+      // Дальше следим за задачей обычным опросом: он сам остановится,
+      // когда `regenerating` опустеет.
+      watchRegeneration(jobId);
+      return true;
+    } catch (error) {
+      dispatch({ type: "NOTICE", notice: error instanceof Error ? error.message : "Slaydni qayta chizib bo‘lmadi" });
+      return false;
+    }
+  };
+
+  /**
+   * Сохранить картинку, собранную браузером.
+   *
+   * В режиме своего текста модель рисует только фон. Пока композиция не
+   * сохранена, в проекте и в архиве лежал бы кадр без единой надписи.
+   */
+  const composeSlide = async (variant: number, imageDataUrl: string) => {
+    const jobId = state.job.id;
+    if (!jobId) return false;
+    try {
+      const result = await api.compose(jobId, variant, imageDataUrl);
+      dispatch({ type: "JOB_UPDATE", job: result.job });
+      callbacks.current.onJobSettled?.();
+      return true;
+    } catch (error) {
+      dispatch({ type: "NOTICE", notice: error instanceof Error ? error.message : "Saqlab bo‘lmadi" });
+      return false;
+    }
+  };
+
+  /** Опрос до конца перерисовки. Отдельный от watch: статус задачи не меняется. */
+  const watchRegeneration = (jobId: string) => {
+    stopWatch.current?.();
+    stopWatch.current = api.watchRegeneration(jobId, (job, balance) => {
+      dispatch({ type: "JOB_UPDATE", job });
+      if (typeof balance === "number") {
+        dispatch({ type: "BALANCE_SET", balance });
+        callbacks.current.onBalanceChange?.(balance);
+      }
+      if (!job.regenerating) {
+        stopWatch.current?.();
+        stopWatch.current = null;
+        callbacks.current.onJobSettled?.();
+      }
+    }, (message) => dispatch({ type: "NOTICE", notice: message }));
+  };
+
   return {
     state,
     setAssets,
@@ -228,7 +336,12 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
     updateSettings,
     updateBrief,
     generate,
+    rebuildPlan,
     cancel,
+    regenerateSlide,
+    composeSlide,
+    /** Заново запросить тавсиф, если предыдущая попытка упала. */
+    retryListing: () => { const jobId = state.job.id; if (jobId) void fetchListing(jobId); },
     download: (url: string) => api.download(url),
     reset: () => { stopWatch.current?.(); sessionStorage.removeItem("naslai.activeJob"); generationInFlight.current = false; dispatch({ type: "RESET", balance: state.balance }); },
     setNotice: (notice: string | null) => dispatch({ type: "NOTICE", notice }),
