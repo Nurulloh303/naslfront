@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import { CreateCardPage } from "../features/create/CreateCardPage";
 import { AccountProvider, useAccount } from "./account/AccountContext";
 import { SocialAuth } from "./account/SocialAuth";
@@ -114,32 +114,9 @@ function AppBootLoader() {
 }
 
 function AuthPage() {
-  const { login, register, loading, error } = useAccount();
+  const { error } = useAccount();
   const { t } = useLanguage();
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const authFormRef = useRef<HTMLElement>(null);
-  const changeMode = (next: "login" | "register") => {
-    setMode(next);
-    setLocalError("");
-    setName("");
-    setEmail("");
-    setPassword("");
-  };
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setLocalError("");
-    try {
-      if (mode === "login") await login({ email, password });
-      else await register({ name, email, password });
-    } catch (reason) {
-      setLocalError(reason instanceof Error ? reason.message : t("auth.failed"));
-    }
-  };
 
   return <main className="reference-app auth-split">
     <section className="auth-split-left">
@@ -152,26 +129,11 @@ function AuthPage() {
     </section>
 
     <section className="auth-split-right">
-      <section className="auth-card auth-form-card" ref={authFormRef} aria-labelledby="auth-title">
+      <section className="auth-card auth-form-card" aria-labelledby="auth-title">
         <p className="eyebrow">{t("auth.eyebrow")}</p>
-        <h2 id="auth-title" className="sr-only">{mode === "login" ? t("auth.loginTitle") : t("auth.registerTitle")}</h2>
-        <div className="auth-tabs" aria-label={t("auth.tabsAria")}>
-          <button type="button" aria-pressed={mode === "login"} onClick={() => changeMode("login")}>{t("auth.loginTitle")}</button>
-          <button type="button" aria-pressed={mode === "register"} onClick={() => changeMode("register")}>{t("auth.registerTab")}</button>
-        </div>
-        <form className="auth-form" onSubmit={(event) => void submit(event)}>
-          {mode === "register" && <label>{t("auth.name")}<input autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} /></label>}
-          <label>Email<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
-          <label>{t("auth.password")}
-            <span className="pass-wrap">
-              <input type={showPassword ? "text" : "password"} autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} required />
-              <button type="button" className="pass-eye" aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")} onClick={() => setShowPassword((value) => !value)}>{showPassword ? "◎" : "◉"}</button>
-            </span>
-          </label>
-          {(localError || error) && <p className="auth-error" role="alert">{localError || error}</p>}
-          <button className="button primary" type="submit" disabled={loading}>{loading ? t("auth.checking") : mode === "login" ? t("auth.loginTitle") : t("auth.submitRegister")}</button>
-        </form>
-        <SocialAuth onError={setLocalError} />
+        <h2 id="auth-title">{t("auth.loginTitle")}</h2>
+        {(localError || error) && <p className="auth-error" role="alert">{localError || error}</p>}
+        <SocialAuth onError={setLocalError} divider={false} />
       </section>
     </section>
   </main>;

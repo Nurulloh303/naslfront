@@ -1,8 +1,18 @@
 import { apiFetch } from "../../../app/apiClient";
-import type { GenerationJob, GenerationSettings, ProductAsset, ProductBrief, ProductListing, Quote, SlidePlan } from "../domain/types";
+import type { GenerationJob, GenerationLayer, GenerationSettings, ProductAsset, ProductBrief, ProductListing, Quote, SlidePlan } from "../domain/types";
 
 type StartResponse = { job: GenerationJob; balance: number; idempotentReplay: boolean };
 export type CancelResponse = { job: GenerationJob; balance: number; refunded: number; delivered: number };
+export type SeparateLayersOptions = {
+  numLayers?: number;
+  force?: boolean;
+};
+export type SeparateLayersResponse = {
+  ok: boolean;
+  variant: number;
+  layers: GenerationLayer[];
+  job?: GenerationJob;
+};
 
 export type CreateApi = {
   analyze(asset: ProductAsset, marketplace: GenerationSettings["marketplace"], language: GenerationSettings["language"]): Promise<ProductBrief>;
@@ -14,6 +24,8 @@ export type CreateApi = {
   plan(input: { brief: ProductBrief; settings: GenerationSettings }): Promise<SlidePlan[]>;
   /** Bitta slaydni qayta chizish. 1 token, qolgan rasmlar tegilmaydi. */
   regenerateSlide(jobId: string, variant: number, note: string): Promise<{ job: GenerationJob; balance: number }>;
+  /** Rasmni AI orqali qatlamlarga (fon, mahsulot, matn) ajratish. */
+  separateLayers(jobId: string, variant: number, options?: SeparateLayersOptions): Promise<SeparateLayersResponse>;
   /** Brauzerda yig'ilgan (o'z matni bilan) slaydni saqlash. Bepul. */
   compose(jobId: string, variant: number, imageDataUrl: string): Promise<{ job: GenerationJob }>;
   /** Slayd qayta chizilishini kuzatish: umumiy vazifa holati o'zgarmaydi. */
@@ -73,6 +85,18 @@ export function createP0Api(): CreateApi {
     async listing(jobId) {
       const payload = await jsonRequest<{ listing: ProductListing }>(`/api/projects/${encodeURIComponent(jobId)}/listing`, { method: "POST", body: "{}" });
       return payload.listing;
+    },
+    async separateLayers(jobId, variant, options = {}) {
+      return jsonRequest<SeparateLayersResponse>(
+        `/api/generations/${encodeURIComponent(jobId)}/results/${variant}/layers`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            numLayers: options.numLayers ?? 4,
+            force: options.force ?? false,
+          }),
+        },
+      );
     },
     async compose(jobId, variant, imageDataUrl) {
       return jsonRequest<{ job: GenerationJob }>(

@@ -1,0 +1,476 @@
+/* ============================================================
+   NASLAI STUDIO — Magic Layers Modal & Canvas Editor Styles
+   Canva / Figma inspired interactive layer studio
+   ============================================================ */
+
+.magic-layers-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(10, 8, 8, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  animation: magicFadeIn 0.25s ease-out both;
+  overflow: hidden;
+  color: #fffdf7;
+}
+
+@keyframes magicFadeIn {
+  from { opacity: 0; transform: scale(0.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* --- Top Header Bar --- */
+.magic-layers-header {
+  height: 64px;
+  min-height: 64px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(18, 15, 14, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  gap: 16px;
+}
+
+.magic-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.magic-brand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(255, 77, 28, 0.25), rgba(255, 120, 50, 0.15));
+  border: 1px solid rgba(255, 77, 28, 0.45);
+  color: #ff7043;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.magic-header-titles h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fffdf7;
+  font-family: var(--font-display, "Space Grotesk", sans-serif);
+}
+
+.magic-header-titles p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: rgba(255, 253, 247, 0.6);
+}
+
+.magic-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.magic-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  font-family: inherit;
+}
+
+.magic-btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #fffdf7;
+}
+
+.magic-btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.24);
+  transform: translateY(-1px);
+}
+
+.magic-btn-primary {
+  background: var(--accent, #ff4d1c);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(255, 77, 28, 0.35);
+}
+
+.magic-btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong, #e23c0f);
+  box-shadow: 0 6px 18px rgba(255, 77, 28, 0.45);
+  transform: translateY(-1px);
+}
+
+.magic-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.magic-btn-icon {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fffdf7;
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+}
+
+.magic-btn-icon:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+/* --- Main Studio Workspace --- */
+.magic-workspace {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+/* --- Center Canvas Area --- */
+.magic-canvas-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: hidden;
+  position: relative;
+  background: radial-gradient(circle at center, rgba(35, 30, 28, 0.5) 0%, rgba(14, 12, 11, 0.9) 100%);
+}
+
+.magic-canvas-hint-bar {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  background: rgba(20, 18, 17, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: rgba(255, 253, 247, 0.75);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.magic-canvas-wrapper {
+  position: relative;
+  display: inline-block;
+  max-height: calc(100vh - 180px);
+  max-width: 100%;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: #1e1b19;
+  /* Checkerboard transparent pattern */
+  background-image: linear-gradient(45deg, #181514 25%, transparent 25%),
+                    linear-gradient(-45deg, #181514 25%, transparent 25%),
+                    linear-gradient(45deg, transparent 75%, #181514 75%),
+                    linear-gradient(-45deg, transparent 75%, #181514 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+
+.magic-canvas-element {
+  display: block;
+  max-height: calc(100vh - 180px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  cursor: crosshair;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* --- Right Side Panel --- */
+.magic-sidebar {
+  width: 360px;
+  min-width: 360px;
+  background: rgba(22, 19, 18, 0.95);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 20px;
+  gap: 20px;
+}
+
+.magic-section-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 253, 247, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* --- Layer List --- */
+.magic-layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.magic-layer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.magic-layer-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.magic-layer-item.is-active {
+  background: rgba(255, 77, 28, 0.12);
+  border-color: rgba(255, 77, 28, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 77, 28, 0.35);
+}
+
+.magic-layer-item.is-hidden {
+  opacity: 0.5;
+}
+
+.magic-layer-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #12100f;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.magic-layer-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.magic-layer-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fffdf7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.magic-layer-meta {
+  font-size: 11px;
+  color: rgba(255, 253, 247, 0.5);
+  margin-top: 2px;
+}
+
+.magic-layer-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.magic-mini-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 253, 247, 0.6);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+
+.magic-mini-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.magic-mini-btn.is-active {
+  color: var(--accent, #ff4d1c);
+}
+
+/* --- Layer Properties Section --- */
+.magic-layer-props {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.magic-prop-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.magic-prop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: rgba(255, 253, 247, 0.8);
+}
+
+.magic-prop-header span {
+  font-weight: 600;
+}
+
+.magic-prop-header b {
+  color: var(--accent, #ff4d1c);
+  font-family: var(--font-display, monospace);
+  font-size: 12px;
+}
+
+.magic-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  outline: none;
+  cursor: pointer;
+  accent-color: var(--accent, #ff4d1c);
+}
+
+.magic-action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.magic-action-grid button {
+  min-height: 34px;
+  font-size: 12px;
+  padding: 0 10px;
+}
+
+/* --- Loading Overlay --- */
+.magic-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(14, 12, 11, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  padding: 24px;
+}
+
+.magic-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(255, 77, 28, 0.2);
+  border-top-color: var(--accent, #ff4d1c);
+  border-radius: 50%;
+  animation: magicSpin 0.9s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
+}
+
+@keyframes magicSpin {
+  to { transform: rotate(360deg); }
+}
+
+.magic-loading-title {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: var(--font-display, "Space Grotesk", sans-serif);
+  color: #fffdf7;
+}
+
+.magic-loading-sub {
+  font-size: 13px;
+  color: rgba(255, 253, 247, 0.65);
+  max-width: 380px;
+  line-height: 1.5;
+}
+
+/* --- Inline Card Button in ResultPanel --- */
+.magic-layers-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(255, 77, 28, 0.12), rgba(255, 120, 50, 0.08));
+  border: 1px solid rgba(255, 77, 28, 0.35);
+  color: var(--text-primary);
+  font-weight: 600;
+  padding: 0 14px;
+  min-height: 38px;
+  border-radius: var(--radius-control, 8px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 13px;
+}
+
+.magic-layers-trigger-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(255, 77, 28, 0.22), rgba(255, 120, 50, 0.16));
+  border-color: var(--accent, #ff4d1c);
+  transform: translateY(-1px);
+}
+
+.magic-layers-trigger-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.magic-layers-trigger-btn .sparkle {
+  color: var(--accent, #ff4d1c);
+  font-size: 14px;
+}
+
+@media (max-width: 900px) {
+  .magic-workspace {
+    flex-direction: column;
+  }
+  .magic-sidebar {
+    width: 100%;
+    min-width: 100%;
+    height: 320px;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}

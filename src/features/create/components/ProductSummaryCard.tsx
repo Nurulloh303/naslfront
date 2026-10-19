@@ -22,6 +22,12 @@ export function ProductSummaryCard({ assets, brief, disabled, onAssetsChange, on
   const categoryRef = useRef<HTMLDivElement>(null);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [error, setError] = useState("");
+  const benefitSlots = [...brief.benefits, "", "", "", ""].slice(0, 4);
+  const changeBenefit = (index: number, value: string) => {
+    const benefits = [...benefitSlots];
+    benefits[index] = value;
+    onBriefChange({ benefits });
+  };
 
   useEffect(() => {
     if (!categoryOpen) return;
@@ -71,6 +77,13 @@ export function ProductSummaryCard({ assets, brief, disabled, onAssetsChange, on
           {categoryOpen && <div className="category-menu" role="listbox" aria-label={t("productSummary.categoryAria")}>{categoryOptions.map((category) => <button type="button" role="option" aria-selected={brief.category === category} key={category} onClick={() => { onBriefChange({ category }); setCategoryOpen(false); }}>{category}</button>)}</div>}
         </div>
       </div>
+    </div>
+    <div className="benefits-label"><span>{t("brief.benefits")}</span><span>{brief.benefits.filter(Boolean).length}/4</span></div>
+    <div className="benefits-list">
+      {benefitSlots.map((benefit, index) => <label key={index} className="benefit-input">
+        <span>{index + 1}</span>
+        <input disabled={disabled} value={benefit} onChange={(event) => changeBenefit(index, event.target.value)} placeholder={t("brief.benefitPlaceholder")} />
+      </label>)}
     </div>
     {brief.aiNotice && <p className={`analysis-note ${brief.aiNotice.startsWith("AI tahlil ishlamadi") ? "is-warning" : ""}`}>{brief.aiNotice}</p>}
     {error && <p className="field-error" role="alert">{error}</p>}

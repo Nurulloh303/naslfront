@@ -39,6 +39,18 @@ export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
     ...(init?.headers as Record<string, string> | undefined),
   };
 
+  if (!headers["Authorization"] && typeof window !== "undefined") {
+    const token =
+      window.localStorage.getItem("token") ||
+      window.localStorage.getItem("access_token") ||
+      window.localStorage.getItem("authToken") ||
+      window.sessionStorage.getItem("token") ||
+      window.sessionStorage.getItem("access_token");
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
   if (!SAFE_METHODS.has(method)) {
     const csrfToken = readCookie("csrftoken");
     if (csrfToken) headers["X-CSRFToken"] = csrfToken;

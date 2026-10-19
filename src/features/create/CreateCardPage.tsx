@@ -335,7 +335,21 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
         </div>
 
         <ResultShell>
-          <ResultPanel job={state.job} contentType={state.settings.contentType} onGenerate={startGeneration} onDownload={flow.download} onEditSettings={() => setActiveStep(2)} onNewProject={createProject} onRate={(value) => { if (value <= 3) setHelpOpen(true); }} onCancel={state.job.id ? cancelGeneration : undefined} cancelling={cancelling} onRegenerateSlide={(variant, note) => void flow.regenerateSlide(variant, note)} onComposeSlide={(variant, dataUrl) => flow.composeSlide(variant, dataUrl)} onRetryListing={flow.retryListing} />
+          <ResultPanel
+            job={state.job}
+            contentType={state.settings.contentType}
+            onGenerate={startGeneration}
+            onDownload={flow.download}
+            onEditSettings={() => setActiveStep(2)}
+            onNewProject={createProject}
+            onRate={(value) => { if (value <= 3) setHelpOpen(true); }}
+            onCancel={state.job.id ? cancelGeneration : undefined}
+            cancelling={cancelling}
+            onRegenerateSlide={(variant, note) => void flow.regenerateSlide(variant, note)}
+            onSeparateLayers={(variant, options) => flow.separateLayers(variant, options)}
+            onComposeSlide={(variant, dataUrl) => flow.composeSlide(variant, dataUrl)}
+            onRetryListing={flow.retryListing}
+          />
         </ResultShell>
       </div>
     </section>

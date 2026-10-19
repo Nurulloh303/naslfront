@@ -136,6 +136,15 @@ export type ProductListing = {
   notice: string;
 };
 
+export type GenerationLayer = {
+  id: string;
+  name: string;
+  url: string;
+  order: number;
+  width?: number;
+  height?: number;
+};
+
 export type GenerationResult = {
   id: string;
   title: string;
@@ -159,6 +168,8 @@ export type GenerationResult = {
   slide?: { headline: string; subtitle: string; lines: string[] } | null;
   /** Композиция с текстом уже сохранена в проект. */
   composed?: boolean;
+  /** AI ajratgan qatlamlar (Magic Layers). */
+  layers?: GenerationLayer[];
 };
 
 export type GenerationJob = {

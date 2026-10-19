@@ -36,7 +36,7 @@ function loadScript(src: string, id: string) {
   });
 }
 
-export function SocialAuth({ onError }: { onError: (message: string) => void }) {
+export function SocialAuth({ onError, divider = true }: { onError: (message: string) => void; divider?: boolean }) {
   const { t, language } = useLanguage();
   const { loginWithGoogle, loginWithTelegram } = useAccount();
   const [providers, setProviders] = useState<AuthProviders | null>(null);
@@ -105,7 +105,7 @@ export function SocialAuth({ onError }: { onError: (message: string) => void }) 
   if (!providers || (!providers.google && !providers.telegram)) return null;
 
   return <div className="social-auth">
-    <div className="social-auth-divider"><span>{t("auth.social.or")}</span></div>
+    {divider && <div className="social-auth-divider"><span>{t("auth.social.or")}</span></div>}
     <div className="social-auth-buttons">
       {providers.google && <div ref={googleRef} className="social-auth-google" />}
       {providers.telegram && <div ref={telegramRef} className="social-auth-telegram" />}

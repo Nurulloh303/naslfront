@@ -328,6 +328,33 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
     }, (message) => dispatch({ type: "NOTICE", notice: message }));
   };
 
+  /**
+   * AI yordamida rasmni qatlamlarga (fon, mahsulot, matn) ajratish (Magic Layers).
+   */
+  const separateLayers = async (variant: number, options?: { numLayers?: number; force?: boolean }) => {
+    const jobId = state.job.id;
+    if (!jobId) throw new Error("Loyiha topilmadi");
+    try {
+      const result = await api.separateLayers(jobId, variant, options);
+      if (result.job) {
+        dispatch({ type: "JOB_UPDATE", job: result.job });
+      } else if (result.layers) {
+        const updatedResults = state.job.results.map((r, idx) => {
+          if (idx + 1 === variant) {
+            return { ...r, layers: result.layers };
+          }
+          return r;
+        });
+        dispatch({ type: "JOB_UPDATE", job: { ...state.job, results: updatedResults } });
+      }
+      return result;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Qatlamlarga ajratib bo‘lmadi";
+      dispatch({ type: "NOTICE", notice: msg });
+      throw error;
+    }
+  };
+
   return {
     state,
     setAssets,
@@ -339,6 +366,7 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
     rebuildPlan,
     cancel,
     regenerateSlide,
+    separateLayers,
     composeSlide,
     /** Заново запросить тавсиф, если предыдущая попытка упала. */
     retryListing: () => { const jobId = state.job.id; if (jobId) void fetchListing(jobId); },
