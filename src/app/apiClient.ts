@@ -14,7 +14,10 @@
  *    API alohida domenga chiqarilsa — `VITE_API_BASE` ni to'ldiring.
  */
 
-const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/+$/, "");
+const API_BASE = (
+  import.meta.env.VITE_API_BASE ??
+  (import.meta.env.DEV ? "" : "https://api.naslai.uz")
+).replace(/\/+$/, "");
 
 /** Bu usullar serverdagi holatni o'zgartirmaydi — ularga CSRF kerak emas. */
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
