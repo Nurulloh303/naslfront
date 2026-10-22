@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { accountApi, type ProductListing, type ProjectFolder } from "../account/accountApi";
 import { useLanguage } from "../../i18n/LanguageContext";
+import { downloadFile } from "../downloadHelper";
 
 /**
  * Проект как папка.
@@ -109,7 +110,7 @@ export function ProjectFolderView({ id, onClose, onDeleted }: { id: string; onCl
             </button>
             <figcaption>
               <span>{String(index + 1).padStart(2, "0")}</span>
-              <a href={result.downloadUrl} download>{t("cabinet.projects.download")}</a>
+              <button type="button" className="link-button" onClick={() => void downloadFile(result.downloadUrl)}>{t("cabinet.projects.download")}</button>
             </figcaption>
           </figure>)}
         </div>

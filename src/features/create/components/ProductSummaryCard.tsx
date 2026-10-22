@@ -50,6 +50,16 @@ export function ProductSummaryCard({ assets, brief, disabled, onAssetsChange, on
     } catch { setError(t("productSummary.readFailed")); }
   };
 
+  const removeAsset = (id: string) => {
+    const target = assets.find((a) => a.id === id);
+    if (target?.url.startsWith("blob:")) URL.revokeObjectURL(target.url);
+    const remaining = assets.filter((a) => a.id !== id);
+    if (target?.isPrimary && remaining.length > 0) {
+      remaining[0] = { ...remaining[0], isPrimary: true };
+    }
+    onAssetsChange(remaining);
+  };
+
   const removeAll = () => { assets.forEach((asset) => { if (asset.url.startsWith("blob:")) URL.revokeObjectURL(asset.url); }); onAssetsChange([]); };
   const onChange = (event: ChangeEvent<HTMLInputElement>) => { void readFiles(event.target.files); event.target.value = ""; };
 
@@ -59,6 +69,16 @@ export function ProductSummaryCard({ assets, brief, disabled, onAssetsChange, on
       {assets.map((asset) => <div className="summary-thumb" key={asset.id}>
         <img src={asset.url} alt={asset.name} />
         {asset.isPrimary && <i>✓</i>}
+        {!disabled && <button
+          type="button"
+          className="thumb-remove-btn"
+          title={t("productSummary.removePhoto") || "O'chirish"}
+          aria-label={t("productSummary.removePhoto") || "O'chirish"}
+          onClick={(e) => {
+            e.stopPropagation();
+            removeAsset(asset.id);
+          }}
+        >×</button>}
       </div>)}
       {assets.length < 4 && <button type="button" className="summary-add" onClick={() => inputRef.current?.click()} disabled={disabled}>+<span>{t("productSummary.addMore")}</span></button>}
       <input ref={inputRef} className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={onChange} />

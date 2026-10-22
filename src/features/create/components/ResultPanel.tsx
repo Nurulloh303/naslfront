@@ -9,6 +9,7 @@ import { useLanguage } from "../../../i18n/LanguageContext";
 type Props = {
   job: GenerationJob;
   contentType: ContentMode;
+  hasReference?: boolean;
   onGenerate: () => void;
   onDownload: (url: string) => void;
   onEditSettings: () => void;
@@ -144,7 +145,7 @@ function SlideFix({ variant, count, note, busy, disabled, onSubmit }: {
   </div>;
 }
 
-export function ResultPanel({ job, contentType, onGenerate, onDownload, onEditSettings, onNewProject, onRate, onCancel, cancelling, onRegenerateSlide, onComposeSlide, onSeparateLayers, onRetryListing }: Props) {
+export function ResultPanel({ job, contentType, hasReference, onGenerate, onDownload, onEditSettings, onNewProject, onRate, onCancel, cancelling, onRegenerateSlide, onComposeSlide, onSeparateLayers, onRetryListing }: Props) {
   const { t } = useLanguage();
   // Оценка хранится ПО ВАРИАНТАМ. Раньше состояние было одно на всю
   // панель, и оценка одного варианта подсвечивала звёзды у всех.
@@ -161,6 +162,54 @@ export function ResultPanel({ job, contentType, onGenerate, onDownload, onEditSe
   const isPhoto = contentType === "photo";
   const resultWordByType: Partial<Record<ContentMode, string>> = { video: "video", photo: "foto", fashion: "surat", copyStyle: "karta", marketplacePackage: "slayd" };
   const resultWord = resultWordByType[contentType] ?? "karta";
+
+  // Real-time dynamic smooth progress pacing with elapsed time
+  const [smoothProgress, setSmoothProgress] = useState(job.progress || 5);
+
+  useEffect(() => {
+    if (!running) {
+      if (job.status === "success") setSmoothProgress(100);
+      return;
+    }
+    setSmoothProgress((prev) => Math.max(prev, job.progress, 5));
+    const start = Date.now();
+    const interval = window.setInterval(() => {
+      const elapsedSec = (Date.now() - start) / 1000;
+      setSmoothProgress((current) => {
+        if (job.progress > current) return job.progress;
+        let target = current;
+        if (elapsedSec < 3) {
+          target = 6 + elapsedSec * 4.5; // ~6% -> ~20%
+        } else if (elapsedSec < 8) {
+          target = 20 + (elapsedSec - 3) * 5.2; // ~20% -> ~46%
+        } else if (elapsedSec < 16) {
+          target = 46 + (elapsedSec - 8) * 3.5; // ~46% -> ~74%
+        } else if (elapsedSec < 26) {
+          target = 74 + (elapsedSec - 16) * 1.5; // ~74% -> ~89%
+        } else {
+          target = Math.min(94, 89 + (elapsedSec - 26) * 0.25);
+        }
+        return Math.max(current, Math.min(94, Math.round(target)));
+      });
+    }, 400);
+
+    return () => window.clearInterval(interval);
+  }, [running, job.status, job.progress]);
+
+  // Stage message that dynamically reflects progress
+  const getDynamicMessage = () => {
+    if (job.message && !job.message.includes("Token balansi tekshirilib") && !job.message.includes("Проверка токенов")) {
+      return job.message;
+    }
+    if (smoothProgress < 20) return t("results.progressStage1");
+    if (smoothProgress < 48) return t("results.progressStage2");
+    if (smoothProgress < 75) return t("results.progressStage3");
+    if (smoothProgress < 90) return t("results.progressStage4");
+    return t("results.progressStage5");
+  };
+
+  const displayMessage = getDynamicMessage();
+
   const rate = (resultId: string, value: number) => {
     setRatings((current) => ({ ...current, [resultId]: value }));
     onRate?.(value);
@@ -190,10 +239,10 @@ export function ResultPanel({ job, contentType, onGenerate, onDownload, onEditSe
     <div className="section-heading"><span>03</span><div><h2 id="results-step">{t("results.title")}</h2><p>{t("results.subtitle")}</p></div></div>
     {job.status === "analyzing" ? <AnalysisProgress /> : null}
     {job.status === "idle" || job.status === "ready" ? <div className="empty-result"><div className="result-mark">✦</div><h3>{t("results.emptyTitle", { word: resultWord })}</h3><p>{t("results.emptyHint")}</p></div> : null}
-    {running ? <div className="job-card" aria-busy="true"><div className="job-top"><span className="pulse-dot"/><b>{job.message}</b><span>{job.progress}%</span></div><div className="progress"><span style={{ width: `${job.progress}%` }} /></div><WaitTimer startMs={job.elapsedMs ?? 0} /><p>{t("results.jobSavedNote")}</p>{onCancel ? <button type="button" className="button ghost job-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? t("results.cancelling") : t("results.cancel")}</button> : null}</div> : null}
+    {running ? <div className="job-card" aria-busy="true"><div className="job-top"><span className="pulse-dot"/><b>{displayMessage}</b><span>{smoothProgress}%</span></div><div className="progress"><span style={{ width: `${smoothProgress}%` }} /></div><WaitTimer startMs={job.elapsedMs ?? 0} /><p>{t("results.jobSavedNote")}</p>{onCancel ? <button type="button" className="button ghost job-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? t("results.cancelling") : t("results.cancel")}</button> : null}</div> : null}
     {job.status === "failed" ? <div className="error-card"><b>{t("results.failedTitle")}</b><p>{job.error}</p><div className="result-actions"><button type="button" className="button secondary" onClick={onGenerate}>{t("results.retry")}</button><button type="button" className="button secondary" onClick={onEditSettings}>{t("results.editSettings")}</button></div></div> : null}
     {job.regenerateError ? <p className="reference-warning" role="status">{job.regenerateError}</p> : null}
-    {job.status === "success" && job.results.length ? <div className="result-variants">{job.results.map((result, index) => <article className={`result-card ${isVideo ? "video-result" : isPhoto ? "photo-result" : ""}`} key={result.id}><img src={result.previewUrl} alt={isVideo ? "Yaratilgan mahsulot videosi prevyusi" : isPhoto ? "Yaratilgan mahsulot fotosi" : "Yaratilgan mahsulot kartasi"} /><div><span className="success-pill">{t("results.readyPill")}</span><h3>{result.title}</h3><p>{result.width}×{result.height} · yuklangan mahsulot asosida yaratildi</p>{result.referenceUsed === false && <p className="reference-warning">{t("results.referenceDropped")}</p>}{result.referenceUsed === "partial" && <p className="reference-warning">{t("results.referencePartial")}</p>}<div className="result-quality"><b>{t("results.qualityTitle")}</b><span>86/100</span><small>{t("results.qualityHint")}</small></div><div className="result-actions"><button className="button primary" type="button" onClick={() => onDownload(result.downloadUrl)}>{isVideo ? "Prevyu yuklash" : isPhoto ? "Foto yuklash" : "Kartani yuklash"}</button>{!isVideo && onSeparateLayers && onComposeSlide ? <button type="button" className="magic-layers-trigger-btn" title={t("magicLayers.buttonTitle")} disabled={loadingLayersVariant === index + 1} onClick={() => handleOpenLayers(index + 1)}><span className="sparkle">✨</span>{loadingLayersVariant === index + 1 ? t("magicLayers.loadingBtn") : t("magicLayers.button")}</button> : null}<button className="button secondary" type="button" onClick={onGenerate}>{t("results.regenerate")}</button><button className="button secondary" type="button" onClick={onNewProject}>{t("results.newProject")}</button></div>{job.textMode === "own" && onComposeSlide && result.slide ? <div className="slide-text-actions">
+    {job.status === "success" && job.results.length ? <div className="result-variants">{job.results.map((result, index) => <article className={`result-card ${isVideo ? "video-result" : isPhoto ? "photo-result" : ""}`} key={result.id}><img src={result.previewUrl} alt={isVideo ? "Yaratilgan mahsulot videosi prevyusi" : isPhoto ? "Yaratilgan mahsulot fotosi" : "Yaratilgan mahsulot kartasi"} /><div><span className="success-pill">{t("results.readyPill")}</span><h3>{result.title}</h3><p>{result.width}×{result.height} · yuklangan mahsulot asosida yaratildi</p>{hasReference !== false && result.referenceUsed === false && <p className="reference-warning">{t("results.referenceDropped")}</p>}{hasReference !== false && result.referenceUsed === "partial" && <p className="reference-warning">{t("results.referencePartial")}</p>}<div className="result-quality"><b>{t("results.qualityTitle")}</b><span>86/100</span><small>{t("results.qualityHint")}</small></div><div className="result-actions"><button className="button primary" type="button" onClick={() => onDownload(result.downloadUrl)}>{isVideo ? "Prevyu yuklash" : isPhoto ? "Foto yuklash" : "Kartani yuklash"}</button>{!isVideo && onSeparateLayers && onComposeSlide ? <button type="button" className="magic-layers-trigger-btn" title={t("magicLayers.buttonTitle")} disabled={loadingLayersVariant === index + 1} onClick={() => handleOpenLayers(index + 1)}><span className="sparkle">✨</span>{loadingLayersVariant === index + 1 ? t("magicLayers.loadingBtn") : t("magicLayers.button")}</button> : null}<button className="button secondary" type="button" onClick={onGenerate}>{t("results.regenerate")}</button><button className="button secondary" type="button" onClick={onNewProject}>{t("results.newProject")}</button></div>{job.textMode === "own" && onComposeSlide && result.slide ? <div className="slide-text-actions">
       <button type="button" className="button secondary" onClick={() => setEditing(editing === index + 1 ? null : index + 1)}>
         {editing === index + 1 ? t("textLayer.close") : result.composed ? t("textLayer.editAgain") : t("textLayer.open")}
       </button>

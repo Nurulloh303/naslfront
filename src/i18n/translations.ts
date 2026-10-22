@@ -10,7 +10,7 @@ const uz = {
   common: { brand: "naslai.uz", token: "token" },
   nav: { otherFeatures: "Boshqa imkoniyatlar", batch: "Partiya", createCard: "Karta yaratish", newProject: "Loyiha yaratish", allProjects: "Barcha loyihalar", profileAria: "Foydalanuvchi profili" },
   profileMenu: { topUp: "Tokenlarni to‘ldirish", profile: "Profil", logout: "Chiqish" },
-  profileHub: { tabProfile: "Profil", tabTokens: "Tokenlar va tariflar", tabHistory: "Tokenlar tarixi", tabApi: "API kabineti", tabRef: "Referalka", tabsAria: "Profil bo‘limlari", modalTitle: "Balansni to‘ldirish", modalAvailable: "Mavjud balans", modalClose: "Yopish", priceTitle: "Token narxlari", priceNote: "1 token = 1 tayyor rasm. Narx eng kichik paket bo‘yicha; katta paketda token arzonroq.", priceImage: "Har bir tayyor rasm", priceVariant: "Har bir qo‘shimcha variant", pricePage: "Har bir qo‘shimcha sahifa", pricePackage: "Marketplace paketining har bir slaydi ({{min}}–{{max}} ta)", planName: "Starter", planText: "Mahsulot kartalarini sinash va kichik katalog uchun.", planSoon: "Tez kunda", planBuy: "Token sotib olish", planOff: "To‘lov ulanmagan" },
+  profileHub: { tabProfile: "Profil", tabTokens: "Tokenlar va tariflar", tabHistory: "Tokenlar tarixi", tabApi: "API kabineti", tabRef: "Referalka", tabsAria: "Profil bo‘limlari", backHome: "Bosh sahifaga qaytish", modalTitle: "Balansni to‘ldirish", modalAvailable: "Mavjud balans", modalClose: "Yopish", priceTitle: "Token narxlari", priceNote: "1 token = 1 tayyor rasm. Narx eng kichik paket bo‘yicha; katta paketda token arzonroq.", priceImage: "Har bir tayyor rasm", priceVariant: "Har bir qo‘shimcha variant", pricePage: "Har bir qo‘shimcha sahifa", pricePackage: "Marketplace paketining har bir slaydi ({{min}}–{{max}} ta)", planName: "Starter", planText: "Mahsulot kartalarini sinash va kichik katalog uchun.", planSoon: "Tez kunda", planBuy: "Token sotib olish", planOff: "To‘lov ulanmagan" },
   footer: {
     product: "MAHSULOT", home: "Bosh sahifa", telegramChannel: "Telegram kanal",
     help: "YORDAM", telegramHelp: "Telegram yordam", helpChat: "Yordam chati",
@@ -106,6 +106,7 @@ const uz = {
     reseparate: "AI orqali qayta ajratish",
     reseparating: "Qayta ajratilmoqda…",
     save: "Saqlash va qo‘llash",
+    download: "Yuklab olish",
     saving: "Saqlanmoqda…",
     close: "Yopish",
     saveSuccess: "Karta qatlamlari yangilandi!",
@@ -277,7 +278,7 @@ const uz = {
   },
   productSummary: {
     fileReadFailed: "Faylni o‘qib bo‘lmadi", invalidType: "JPG, PNG yoki WebP tanlang.", maxSize: "Har bir rasm 10 MB dan kichik bo‘lishi kerak. Foto yuborishdan oldin o‘zi kichiklashtiriladi.", readFailed: "Rasmni o‘qib bo‘lmadi. Boshqa faylni sinab ko‘ring.",
-    title: "Mahsulotingiz", addMore: "Yana", count: "Turli tomondan 4 tagacha mahsulot fotosi", clear: "tozalash", label: "Bu", titlePlaceholder: "Masalan: ryukzak", subtitlePlaceholder: "Qisqa aniqlovchi: avto uchun, svetodiodli…", categoryAria: "Mahsulot kategoriyasi",
+    title: "Mahsulotingiz", addMore: "Yana", count: "Turli tomondan 4 tagacha mahsulot fotosi", clear: "tozalash", removePhoto: "Rasmni o‘chirish", label: "Bu", titlePlaceholder: "Masalan: ryukzak", subtitlePlaceholder: "Qisqa aniqlovchi: avto uchun, svetodiodli…", categoryAria: "Mahsulot kategoriyasi",
   },
   brief: { title: "AI brief", subtitle: "Faktlarni tekshiring — tavsiyalar mahsulot tavsifi o‘rnini bosmaydi.", pill: "AI yozdi", productName: "Mahsulot nomi", productPlaceholder: "Masalan, shopper sumka", category: "Kategoriya", categoryPlaceholder: "Masalan, aksessuarlar", sku: "Artikul", optional: "ixtiyoriy", skuPlaceholder: "SKU yoki artikul", benefits: "Afzalliklar", benefitPlaceholder: "Rasmda ko‘ringan aniq afzallik" },
   results: {
@@ -285,6 +286,7 @@ const uz = {
     emptyTitle: "Bu yerda {{word}} paydo bo‘ladi", emptyHint: "Mahsulotni yuklang, ssenariyni sozlang va generatsiyani boshlang.",
     analysisSteps: { s1: "Fotoingiz qabul qilindi", s2: "Rasm sifati tekshirilmoqda", s3: "AI mahsulotni aniqlamoqda", s4: "Afzalliklar va kategoriya tanlanmoqda", s5: "Brief yig‘ilmoqda" },
     analysisNote: "Odatda 5–15 soniya. Sahifani yopmang.",
+    progressStage1: "Token balansi tekshirilib, vazifa boshlanmoqda…", progressStage2: "AI mahsulotni tahlil qilib, dizayn tuzmoqda…", progressStage3: "Grafik elementlar va render chizilmoqda…", progressStage4: "Matnlar va vizual effektlar uyg‘unlashtirilmoqda…", progressStage5: "Natija yakunlanmoqda…",
     jobSavedNote: "Vazifa serverda saqlanadi. Qaytganingizda holat avtomatik tiklanadi.", failedTitle: "Generatsiya boshlanmadi", retry: "Yana urinish", readyPill: "Render tayyor", referenceDropped: "⚠ Dizayn referensi ishlatilmadi — AI xatosi tufayli oddiy shablonga o‘tildi. Qayta yarating.", referencePartial: "Referensdan faqat uslub tavsifi olindi — natija namunadan farq qilishi mumkin.",
     slideFix: "Shu rasmni qayta chizish", slideFixCount: "{{count}} marta qayta chizilgan", slideFixWishLabel: "Nimani o‘zgartiramiz? (ixtiyoriy)", slideFixWishPlaceholder: "Masalan: fon yorug‘roq bo‘lsin, mahsulot kattaroq",
     slideFixConfirm: "Qayta chizish · 1 token", slideFixCancel: "Kerak emas", slideFixWorking: "Shu rasm qayta chizilmoqda…",
@@ -425,7 +427,7 @@ const ru: typeof uz = {
   common: { brand: "naslai.uz", token: "токен" },
   nav: { otherFeatures: "Другие возможности", batch: "Партия", createCard: "Создать карточку", newProject: "Создать проект", allProjects: "Все проекты", profileAria: "Профиль пользователя" },
   profileMenu: { topUp: "Пополнить токены", profile: "Профиль", logout: "Выйти" },
-  profileHub: { tabProfile: "Профиль", tabTokens: "Токены и тарифы", tabHistory: "История токенов", tabApi: "API кабинет", tabRef: "Рефералка", tabsAria: "Разделы профиля", modalTitle: "Пополнить баланс", modalAvailable: "Доступный баланс", modalClose: "Закрыть", priceTitle: "Цены на токены", priceNote: "1 токен = 1 готовая картинка. Цена указана по самому маленькому пакету; в больших токен дешевле.", priceImage: "Каждая готовая картинка", priceVariant: "Каждый доп. вариант", pricePage: "Каждая доп. страница", pricePackage: "Каждый слайд пакета ({{min}}–{{max}} слайдов)", planName: "Starter", planText: "Для теста карточек товара и небольшого каталога.", planSoon: "Скоро", planBuy: "Купить токены", planOff: "Оплата не подключена" },
+  profileHub: { tabProfile: "Профиль", tabTokens: "Токены и тарифы", tabHistory: "История токенов", tabApi: "API кабинет", tabRef: "Рефералка", tabsAria: "Разделы профиля", backHome: "На главную", modalTitle: "Пополнить баланс", modalAvailable: "Доступный баланс", modalClose: "Закрыть", priceTitle: "Цены на токены", priceNote: "1 токен = 1 готовая картинка. Цена указана по самому маленькому пакету; в больших токен дешевле.", priceImage: "Каждая готовая картинка", priceVariant: "Каждый доп. вариант", pricePage: "Каждая доп. страница", pricePackage: "Каждый слайд пакета ({{min}}–{{max}} слайдов)", planName: "Starter", planText: "Для теста карточек товара и небольшого каталога.", planSoon: "Скоро", planBuy: "Купить токены", planOff: "Оплата не подключена" },
   footer: {
     product: "ПРОДУКТ", home: "Главная", telegramChannel: "Telegram-канал",
     help: "ПОДДЕРЖКА", telegramHelp: "Telegram-поддержка", helpChat: "Чат поддержки",
@@ -521,6 +523,7 @@ const ru: typeof uz = {
     reseparate: "Переразделить через AI",
     reseparating: "Переразделяем…",
     save: "Применить и сохранить",
+    download: "Скачать",
     saving: "Сохраняем…",
     close: "Закрыть",
     saveSuccess: "Слои карточки успешно сохранены!",
@@ -692,7 +695,7 @@ const ru: typeof uz = {
   },
   productSummary: {
     fileReadFailed: "Не удалось прочитать файл", invalidType: "Выберите JPG, PNG или WebP.", maxSize: "Каждое изображение должно быть меньше 10 МБ. Большое фото уменьшается автоматически перед отправкой.", readFailed: "Не удалось прочитать изображение. Попробуйте другой файл.",
-    title: "Ваш товар", addMore: "Ещё", count: "До 4 фото товара с разных сторон", clear: "очистить", label: "Это", titlePlaceholder: "Например: рюкзак", subtitlePlaceholder: "Короткое уточнение: для авто, светодиодная…", categoryAria: "Категория товара",
+    title: "Ваш товар", addMore: "Ещё", count: "До 4 фото товара с разных сторон", clear: "очистить", removePhoto: "Удалить фото", label: "Это", titlePlaceholder: "Например: рюкзак", subtitlePlaceholder: "Короткое уточнение: для авто, светодиодная…", categoryAria: "Категория товара",
   },
   brief: { title: "AI brief", subtitle: "Проверьте факты — подсказки не заменяют описание товара.", pill: "AI черновик", productName: "Название товара", productPlaceholder: "Например, shopper сумка", category: "Категория", categoryPlaceholder: "Например, аксессуары", sku: "Артикул", optional: "необязательно", skuPlaceholder: "SKU или артикул", benefits: "Преимущества", benefitPlaceholder: "Конкретное преимущество, видимое на фото" },
   results: {
@@ -700,6 +703,7 @@ const ru: typeof uz = {
     emptyTitle: "Здесь появится {{word}}", emptyHint: "Загрузите товар, настройте сценарий и начните генерацию.",
     analysisSteps: { s1: "Ваше фото получено", s2: "Проверяем качество снимка", s3: "AI распознаёт товар", s4: "Подбираем категорию и преимущества", s5: "Собираем бриф" },
     analysisNote: "Обычно 5–15 секунд. Не закрывайте страницу.",
+    progressStage1: "Проверка токенов и запуск задачи…", progressStage2: "AI анализирует товар и строит композицию…", progressStage3: "Отрисовка графических элементов и рендера…", progressStage4: "Сведение текстов и визуальных эффектов…", progressStage5: "Завершение и подготовка результата…",
     jobSavedNote: "Задача сохраняется на сервере. При возврате статус восстановится автоматически.", failedTitle: "Генерация не началась", retry: "Попробовать снова", readyPill: "Рендер готов", referenceDropped: "⚠ Референс не применён — из-за ошибки AI сработал запасной шаблон. Попробуйте пересоздать.", referencePartial: "Из референса взято только текстовое описание стиля — результат может отличаться от образца.",
     slideFix: "Переделать эту картинку", slideFixCount: "переделана раз: {{count}}", slideFixWishLabel: "Что поменять? (необязательно)", slideFixWishPlaceholder: "Например: фон посветлее, товар крупнее",
     slideFixConfirm: "Переделать · 1 токен", slideFixCancel: "Не надо", slideFixWorking: "Переделываем эту картинку…",

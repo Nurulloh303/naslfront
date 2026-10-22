@@ -4,6 +4,7 @@ import { accountApi, type AccountProject, type AccountUser } from "../account/ac
 import type { CabinetRoute } from "../routes";
 import { CabinetFooter, CabinetHeader } from "./CabinetHeader";
 import { useLanguage } from "../../i18n/LanguageContext";
+import { downloadFile } from "../downloadHelper";
 import { BuyTokens } from "./BuyTokens";
 import { LEGAL_CONTENT, type LegalDoc } from "./legalContent";
 import { ProjectFolderView } from "./ProjectFolderView";
@@ -50,12 +51,7 @@ export function ProjectsPage({ onNavigate, onLogout }: Omit<Props, "route">) {
 
   const download = (project: AccountProject) => {
     if (!project.previewUrl) return;
-    const link = document.createElement("a");
-    link.href = `${project.previewUrl}?download=1`;
-    link.download = "";
-    document.body.append(link);
-    link.click();
-    link.remove();
+    void downloadFile(project.previewUrl, `${project.name || "loyiha"}.png`);
   };
 
   if (openId) {
@@ -287,7 +283,20 @@ function ProfileHub({ initialTab, onNavigate, onLogout }: { initialTab: HubTab }
   return <main className="reference-app cabinet-page profile-hub-page">
     <CabinetHeader route={tab} balance={account.balance} onNavigate={onNavigate} onLogout={onLogout} />
     <section className="cabinet-content">
-      <div className="cabinet-page-heading"><div><p className="eyebrow">{t("cabinet.eyebrow")}</p><h1>{t("cabinet.profile.title")}</h1></div></div>
+      <div className="cabinet-page-heading">
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <button
+            type="button"
+            className="folder-back"
+            style={{ alignSelf: "flex-start", marginBottom: "4px" }}
+            onClick={() => onNavigate("create")}
+          >
+            ← {t("profileHub.backHome") || "Bosh sahifaga qaytish"}
+          </button>
+          <p className="eyebrow">{t("cabinet.eyebrow")}</p>
+          <h1>{t("cabinet.profile.title")}</h1>
+        </div>
+      </div>
 
       <div className="prof-hero">
         <div className="profile-avatar">{initial}</div>

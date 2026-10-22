@@ -471,6 +471,51 @@ export function MagicLayersEditor({
     }
   };
 
+  const handleDownload = () => {
+    try {
+      const offscreen = document.createElement("canvas");
+      offscreen.width = resultWidth;
+      offscreen.height = resultHeight;
+      const ctx = offscreen.getContext("2d");
+      if (!ctx) return;
+
+      const renderList = [...layers]
+        .filter((l) => !l.deleted && l.visible && l.loaded && l.image)
+        .sort((a, b) => a.order - b.order);
+
+      for (const layer of renderList) {
+        if (!layer.image) continue;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity));
+
+        const w = resultWidth;
+        const h = resultHeight;
+        const cx = layer.x + w / 2;
+        const cy = layer.y + h / 2;
+
+        ctx.translate(cx, cy);
+        ctx.scale(layer.scale, layer.scale);
+        ctx.drawImage(layer.image, -w / 2, -h / 2, w, h);
+
+        ctx.restore();
+      }
+
+      offscreen.toBlob((blob) => {
+        if (!blob) return;
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = `naslai-magic-layers-${variant}.png`;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+      }, "image/png");
+    } catch {
+      // Handled
+    }
+  };
+
   // List of layers sorted descending by order for the sidebar (top layer shown first)
   const displayLayers = [...layers].sort((a, b) => b.order - a.order);
 
@@ -507,6 +552,16 @@ export function MagicLayersEditor({
             disabled={saving}
           >
             ↺ {t("magicLayers.resetAll")}
+          </button>
+
+          <button
+            type="button"
+            className="magic-btn magic-btn-secondary"
+            onClick={handleDownload}
+            disabled={saving}
+            title={t("magicLayers.download")}
+          >
+            ⬇ {t("magicLayers.download")}
           </button>
 
           <button

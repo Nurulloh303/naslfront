@@ -247,7 +247,7 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
     }
     generationInFlight.current = true;
     const idempotencyKey = `gen_${crypto.randomUUID().replaceAll("-", "")}`;
-    dispatch({ type: "JOB_UPDATE", job: { ...state.job, status: "submitting", progress: 3, message: "Token balansi tekshirilib, vazifa yaratilmoqda", error: null } });
+    dispatch({ type: "JOB_UPDATE", job: { ...state.job, status: "submitting", progress: 6, message: "Token balansi tekshirilib, vazifa yaratilmoqda", error: null } });
     try {
       const started = await api.start({ asset, brief: state.brief, settings: state.settings, idempotencyKey });
       dispatch({ type: "BALANCE_SET", balance: started.balance });

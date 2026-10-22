@@ -1,4 +1,5 @@
 import { apiFetch } from "../../../app/apiClient";
+import { downloadFile } from "../../../app/downloadHelper";
 import type { GenerationJob, GenerationLayer, GenerationSettings, ProductAsset, ProductBrief, ProductListing, Quote, SlidePlan } from "../domain/types";
 
 type StartResponse = { job: GenerationJob; balance: number; idempotentReplay: boolean };
@@ -159,12 +160,7 @@ export function createP0Api(): CreateApi {
       return () => { stopped = true; window.clearTimeout(timer); };
     },
     download(url) {
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "";
-      document.body.append(link);
-      link.click();
-      link.remove();
+      void downloadFile(url);
     },
   };
 }
