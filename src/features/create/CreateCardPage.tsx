@@ -179,6 +179,13 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
     window.location.hash = "top";
   };
 
+  /** Magic Layers'dan "← Orqaga": bosh sahifa (karta yaratish) boshiga. */
+  const goHome = () => {
+    onNavigate?.("create");
+    window.location.hash = "top";
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+  };
+
   const openSpecialMode = (mode: ContentMode) => {
     setFeaturesOpen(false);
     selectContentMode(mode);
@@ -348,6 +355,7 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
             cancelling={cancelling}
             onRegenerateSlide={(variant, note) => void flow.regenerateSlide(variant, note)}
             onSeparateLayers={(variant, options) => flow.separateLayers(variant, options)}
+            onBack={goHome}
             onComposeSlide={(variant, dataUrl) => flow.composeSlide(variant, dataUrl)}
             onRetryListing={flow.retryListing}
           />

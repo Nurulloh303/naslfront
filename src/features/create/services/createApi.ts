@@ -1,6 +1,6 @@
 import { apiFetch } from "../../../app/apiClient";
 import { downloadFile } from "../../../app/downloadHelper";
-import type { GenerationJob, GenerationLayer, GenerationSettings, ProductAsset, ProductBrief, ProductListing, Quote, SlidePlan } from "../domain/types";
+import type { GenerationJob, GenerationLayer, GenerationSettings, GenerationTextLayer, ProductAsset, ProductBrief, ProductListing, Quote, SlidePlan } from "../domain/types";
 
 type StartResponse = { job: GenerationJob; balance: number; idempotentReplay: boolean };
 export type CancelResponse = { job: GenerationJob; balance: number; refunded: number; delivered: number };
@@ -12,6 +12,11 @@ export type SeparateLayersResponse = {
   ok: boolean;
   variant: number;
   layers: GenerationLayer[];
+  /** Tahrirlanadigan matn qatlamlari (layersVersion 2). */
+  textLayers?: GenerationTextLayer[];
+  /** Matn rastr qatlamlardan olib tashlanganmi. */
+  textRemoved?: boolean;
+  layersVersion?: number;
   job?: GenerationJob;
 };
 

@@ -54,7 +54,7 @@ export const CARD_HEIGHT = 1440;
  * файла шрифта — иначе первая отрисовка шла бы по подменному шрифту и
  * буквы «прыгали» бы после загрузки.
  */
-const FONT_STACK = '"Inter", "Helvetica Neue", Arial, "Noto Sans", sans-serif';
+export const FONT_STACK = '"Inter", "Helvetica Neue", Arial, "Noto Sans", sans-serif';
 
 /** Разбивает строку по словам так, чтобы каждая часть влезла в ширину. */
 function wrap(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {

@@ -1,533 +1,723 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import type { GenerationLayer } from "../domain/types";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import type { GenerationLayer, GenerationTextLayer } from "../domain/types";
 import { useLanguage } from "../../../i18n/LanguageContext";
+import { downloadBlob } from "../../../app/downloadHelper";
+import {
+  buildEditorLayers,
+  firstLine,
+  newLocalId,
+  normalizeOrders,
+  type EditorLayer,
+  type ImageLayerItem,
+  type TextLayerItem,
+  type TextPatch,
+} from "./magicLayers/editorTypes";
+import {
+  AlphaHitCache,
+  canvasToBlob,
+  canvasToDataUrl,
+  composeScene,
+  drawSelection,
+  ensureFonts,
+  fontStack,
+  hitHandle,
+  hitTestLayers,
+  layoutText,
+  renderScene,
+  rotateVector,
+  type HandleId,
+  type Point,
+} from "./magicLayers/renderLayers";
+import { useLayerHistory } from "./magicLayers/useLayerHistory";
+import { TextLayerProps } from "./magicLayers/TextLayerProps";
+import { ConfirmDialog, DownloadReadySheet } from "./magicLayers/EditorDialogs";
 import "./MagicLayersEditor.css";
+
+export type MagicLayersSource = {
+  layers: GenerationLayer[];
+  textLayers?: GenerationTextLayer[];
+  textRemoved?: boolean;
+};
 
 type Props = {
   jobId: string;
   variant: number;
   initialLayers: GenerationLayer[];
+  /** Tahrirlanadigan matn qatlamlari. Eski natijalarda yo'q — []. */
+  initialTextLayers?: GenerationTextLayer[];
+  /** false — asl yozuv rastr qatlam ichida qolgan bo'lishi mumkin. */
+  textRemoved?: boolean;
   resultWidth?: number;
   resultHeight?: number;
   onClose: () => void;
+  /** "← Orqaga": muharrirni yopib, bosh sahifaga qaytish. */
+  onBack?: () => void;
   onSave: (imageDataUrl: string) => Promise<boolean | void>;
-  onReseparate?: () => Promise<GenerationLayer[]>;
+  onReseparate?: () => Promise<MagicLayersSource>;
 };
 
-interface LayerItemState {
-  id: string;
-  name: string;
-  url: string;
-  order: number;
-  x: number;
-  y: number;
-  scale: number;
-  opacity: number;
-  visible: boolean;
-  deleted: boolean;
-  image: HTMLImageElement | null;
-  loaded: boolean;
-  width: number;
-  height: number;
-}
+type Interaction = {
+  pointerId: number;
+  mode: "move" | "resize";
+  handle: HandleId | null;
+  layerId: string;
+  startPt: Point;
+  start: EditorLayer;
+  /** Sudrashdan oldingi holat — tugaganda bitta undo qadami bo'ladi. */
+  snapshot: EditorLayer[];
+  moved: boolean;
+};
 
-type DragMode = "move" | "resize-nw" | "resize-ne" | "resize-se" | "resize-sw" | null;
+type ImageLoadState = "loading" | "ok" | "error";
+
+const MIN_TEXT_WIDTH = 24;
+const MIN_FONT = 6;
+const MAX_FONT = 600;
+const DOUBLE_TAP_MS = 350;
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag === "INPUT") {
+    const type = (target as HTMLInputElement).type;
+    return !["button", "checkbox", "radio", "range", "color", "submit", "reset"].includes(type);
+  }
+  return false;
+}
 
 export function MagicLayersEditor({
   jobId: _jobId,
   variant,
   initialLayers,
+  initialTextLayers,
+  textRemoved: initialTextRemoved,
   resultWidth = 1080,
   resultHeight = 1440,
   onClose,
+  onBack,
   onSave,
   onReseparate,
 }: Props) {
   const { t } = useLanguage();
+  const W = resultWidth;
+  const H = resultHeight;
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const alphaCache = useRef(new AlphaHitCache());
+  const interaction = useRef<Interaction | null>(null);
+  const lastTap = useRef<{ id: string; at: number } | null>(null);
+  const loadToken = useRef(0);
+  const sourceLayers = useRef<EditorLayer[]>([]);
 
-  const [layers, setLayers] = useState<LayerItemState[]>([]);
+  const history = useLayerHistory<EditorLayer[]>([]);
+  const layers = history.present;
+  const { update, commitFrom, reset: resetHistory } = history;
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [images, setImages] = useState<Record<string, HTMLImageElement | undefined>>({});
+  const [loadStates, setLoadStates] = useState<Record<string, ImageLoadState>>({});
+  const [fontsTick, setFontsTick] = useState(0);
+  const [cssWidth, setCssWidth] = useState(0);
+  const [textRemoved, setTextRemoved] = useState<boolean | undefined>(initialTextRemoved);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const editingRef = useRef<string | null>(null);
+  const draftRef = useRef("");
+  /** Yangi qo'shilgan va hali birinchi marta saqlanmagan matn qatlami. */
+  const pendingNewRef = useRef<string | null>(null);
+
   const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [reseparating, setReseparating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; action: () => void } | null>(null);
+  const [downloadSheet, setDownloadSheet] = useState<{ blob: Blob; filename: string } | null>(null);
 
-  // Dragging and interaction state
-  const isInteracting = useRef(false);
-  const dragMode = useRef<DragMode>(null);
-  const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const layerStartPos = useRef<{ x: number; y: number; scale: number }>({ x: 0, y: 0, scale: 1 });
+  const coarsePointer = useMemo(() => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches, []);
 
-  // Initialize and load images
-  const initLayers = useCallback((rawLayers: GenerationLayer[]) => {
-    // Sort ascending by order (order 1 is background, order 2 is product, order 3 is text, etc.)
-    const sorted = [...rawLayers].sort((a, b) => a.order - b.order);
-    const initialItems: LayerItemState[] = sorted.map((layer) => ({
-      id: layer.id,
-      name: layer.name || `${t("magicLayers.defaultLayer")} ${layer.order}`,
-      url: layer.url,
-      order: layer.order,
-      x: 0,
-      y: 0,
-      scale: 1,
-      opacity: 1,
-      visible: true,
-      deleted: false,
-      image: null,
-      loaded: false,
-      width: layer.width || resultWidth,
-      height: layer.height || resultHeight,
-    }));
+  /* ---------------------------------------------------------------- */
+  /* Yuklash                                                           */
+  /* ---------------------------------------------------------------- */
 
-    setLayers(initialItems);
-    if (initialItems.length > 0) {
-      // Select the top-most or product layer by default
-      const defaultSelected = initialItems.find((l) => l.order === 2) || initialItems[initialItems.length - 1];
-      setSelectedId(defaultSelected.id);
-    }
-
-    // Preload all image assets
-    initialItems.forEach((item) => {
+  const loadImages = useCallback((items: EditorLayer[]) => {
+    const token = ++loadToken.current;
+    alphaCache.current.clear();
+    const imageItems = items.filter((l): l is ImageLayerItem => l.kind === "image");
+    setImages({});
+    setLoadStates(Object.fromEntries(imageItems.map((l) => [l.id, "loading" as ImageLoadState])));
+    const done = (id: string, image: HTMLImageElement | undefined, state: ImageLoadState) => {
+      if (token !== loadToken.current) return;
+      setImages((current) => ({ ...current, [id]: image }));
+      setLoadStates((current) => ({ ...current, [id]: state }));
+    };
+    for (const item of imageItems) {
       const img = new Image();
       img.crossOrigin = "anonymous";
-      img.onload = () => {
-        setLayers((current) =>
-          current.map((l) => (l.id === item.id ? { ...l, image: img, loaded: true, width: img.naturalWidth || l.width, height: img.naturalHeight || l.height } : l))
-        );
-      };
+      img.decoding = "async";
+      img.onload = () => done(item.id, img, "ok");
       img.onerror = () => {
-        // Fallback without crossOrigin if CORS fails
-        const fallbackImg = new Image();
-        fallbackImg.onload = () => {
-          setLayers((current) =>
-            current.map((l) => (l.id === item.id ? { ...l, image: fallbackImg, loaded: true } : l))
-          );
-        };
-        fallbackImg.src = item.url;
+        // CORS rad etsa — crossOrigin'siz. Ko'rinadi, lekin eksportda kanvas ifloslanadi.
+        const fallback = new Image();
+        fallback.onload = () => done(item.id, fallback, "ok");
+        fallback.onerror = () => done(item.id, undefined, "error");
+        fallback.src = item.url;
       };
       img.src = item.url;
-    });
-  }, [resultHeight, resultWidth, t]);
+    }
+  }, []);
 
+  const loadSource = useCallback((raster: GenerationLayer[], text: GenerationTextLayer[] | undefined) => {
+    const items = buildEditorLayers(raster, text, { width: W, height: H, layerLabel: t("magicLayers.defaultLayer"), textLabel: t("magicLayers.textLayer") });
+    sourceLayers.current = items;
+    resetHistory(items);
+    const product = items.find((l) => l.kind === "image" && l.order === 2);
+    setSelectedId(product?.id ?? null);
+    setEditingId(null);
+    editingRef.current = null;
+    pendingNewRef.current = null;
+    loadImages(items);
+  }, [H, W, loadImages, resetHistory, t]);
+
+  // Faqat ochilganda: ota komponent qayta chizilganda foydalanuvchi o'zgarishlari yo'qolmasin.
+  const initialized = useRef(false);
   useEffect(() => {
-    initLayers(initialLayers);
-  }, [initialLayers, initLayers]);
+    if (initialized.current) return;
+    initialized.current = true;
+    loadSource(initialLayers, initialTextLayers);
+  }, [initialLayers, initialTextLayers, loadSource]);
 
-  // Selected layer
-  const activeLayer = layers.find((l) => l.id === selectedId && !l.deleted);
+  // Shriftlar: kerakli oilalar/qalinliklar yuklangach qayta chizamiz.
+  const fontKey = useMemo(
+    () => [...new Set(layers.filter((l): l is TextLayerItem => l.kind === "text").map((l) => `${l.fontFamily}:${l.fontWeight}`))].sort().join("|"),
+    [layers],
+  );
+  useEffect(() => {
+    if (!fontKey) return;
+    let alive = true;
+    const specs = fontKey.split("|").map((k) => {
+      const [fontFamily, weight] = k.split(":");
+      return { fontFamily, fontWeight: Number(weight) };
+    });
+    void ensureFonts(specs).then(() => { if (alive) setFontsTick((n) => n + 1); });
+    return () => { alive = false; };
+  }, [fontKey]);
 
-  // Redraw canvas on state changes
-  const redrawCanvas = useCallback(() => {
+  // Kanvasning ekrandagi kengligi: tutqichlar o'lchami va textarea joylashuvi uchun.
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Clear whole canvas
-    ctx.clearRect(0, 0, resultWidth, resultHeight);
-
-    // Filter active & visible layers sorted by order
-    const renderList = [...layers]
-      .filter((l) => !l.deleted && l.visible && l.loaded && l.image)
-      .sort((a, b) => a.order - b.order);
-
-    for (const layer of renderList) {
-      if (!layer.image) continue;
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity));
-
-      const w = resultWidth;
-      const h = resultHeight;
-      const cx = layer.x + w / 2;
-      const cy = layer.y + h / 2;
-
-      ctx.translate(cx, cy);
-      ctx.scale(layer.scale, layer.scale);
-      ctx.drawImage(layer.image, -w / 2, -h / 2, w, h);
-
-      ctx.restore();
+    const measure = () => setCssWidth(canvas.getBoundingClientRect().width);
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
     }
-
-    // Draw selection outline and resize handles for the active layer
-    if (activeLayer && activeLayer.visible && !activeLayer.deleted) {
-      ctx.save();
-      const w = resultWidth;
-      const h = resultHeight;
-      const cx = activeLayer.x + w / 2;
-      const cy = activeLayer.y + h / 2;
-
-      ctx.translate(cx, cy);
-      ctx.scale(activeLayer.scale, activeLayer.scale);
-
-      // Selection bounding box
-      ctx.strokeStyle = "#ff4d1c";
-      ctx.lineWidth = 3 / activeLayer.scale;
-      ctx.setLineDash([8 / activeLayer.scale, 6 / activeLayer.scale]);
-      ctx.strokeRect(-w / 2, -h / 2, w, h);
-
-      // Corner handles
-      const handleSize = 18 / activeLayer.scale;
-      const corners = [
-        { x: -w / 2, y: -h / 2 },
-        { x: w / 2, y: -h / 2 },
-        { x: w / 2, y: h / 2 },
-        { x: -w / 2, y: h / 2 },
-      ];
-
-      ctx.setLineDash([]);
-      ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "#ff4d1c";
-      ctx.lineWidth = 2.5 / activeLayer.scale;
-
-      for (const corner of corners) {
-        ctx.beginPath();
-        ctx.arc(corner.x, corner.y, handleSize / 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    }
-  }, [activeLayer, layers, resultHeight, resultWidth]);
+    const observer = new ResizeObserver(measure);
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
-    redrawCanvas();
-  }, [redrawCanvas]);
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
-  // Transform client pointer coordinates into canvas coordinates (1080x1440)
-  const getCanvasCoords = (clientX: number, clientY: number) => {
+  /* ---------------------------------------------------------------- */
+  /* Chizish                                                           */
+  /* ---------------------------------------------------------------- */
+
+  const activeLayer = layers.find((l) => l.id === selectedId && !l.deleted) ?? null;
+  const editingLayer = editingId ? (layers.find((l) => l.id === editingId && l.kind === "text") as TextLayerItem | undefined) ?? null : null;
+  const unit = cssWidth > 0 ? W / cssWidth : 1;
+
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = resultWidth / rect.width;
-    const scaleY = resultHeight / rect.height;
-    return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY,
-    };
-  };
-
-  // Check if click hits a corner resize handle of the active layer
-  const hitTestHandle = (pt: { x: number; y: number }): DragMode => {
-    if (!activeLayer) return null;
-    const w = resultWidth;
-    const h = resultHeight;
-    const cx = activeLayer.x + w / 2;
-    const cy = activeLayer.y + h / 2;
-
-    const corners: { mode: DragMode; x: number; y: number }[] = [
-      { mode: "resize-nw", x: cx - (w / 2) * activeLayer.scale, y: cy - (h / 2) * activeLayer.scale },
-      { mode: "resize-ne", x: cx + (w / 2) * activeLayer.scale, y: cy - (h / 2) * activeLayer.scale },
-      { mode: "resize-se", x: cx + (w / 2) * activeLayer.scale, y: cy + (h / 2) * activeLayer.scale },
-      { mode: "resize-sw", x: cx - (w / 2) * activeLayer.scale, y: cy + (h / 2) * activeLayer.scale },
-    ];
-
-    const hitThreshold = 35; // handle touch radius in canvas px
-    for (const c of corners) {
-      const dist = Math.hypot(pt.x - c.x, pt.y - c.y);
-      if (dist <= hitThreshold) return c.mode;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    renderScene(ctx, { width: W, height: H, layers, images, skipTextId: editingId });
+    if (activeLayer && activeLayer.visible && !editingId) {
+      drawSelection(ctx, activeLayer, W, H, unit, coarsePointer ? 10 : 7);
     }
-    return null;
+  }, [activeLayer, coarsePointer, editingId, fontsTick, H, images, layers, unit, W]);
+
+  /* ---------------------------------------------------------------- */
+  /* Qatlam amallari                                                   */
+  /* ---------------------------------------------------------------- */
+
+  const patchLayer = useCallback((id: string, patch: Partial<EditorLayer>, coalesce?: string) => {
+    update((prev) => prev.map((l) => (l.id === id ? ({ ...l, ...patch } as EditorLayer) : l)), { coalesce });
+  }, [update]);
+
+  const patchText = useCallback((id: string, patch: TextPatch, coalesce?: string) => {
+    update((prev) => prev.map((l) => {
+      if (l.id !== id || l.kind !== "text") return l;
+      const next: TextLayerItem = { ...l, ...patch };
+      if (patch.text !== undefined) next.name = firstLine(patch.text) || l.name;
+      return next;
+    }), { coalesce });
+  }, [update]);
+
+  const toggleVisibility = (id: string) => {
+    update((prev) => prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l)));
   };
 
-  // Pointer interactions
-  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const pt = getCanvasCoords(e.clientX, e.clientY);
-
-    // 1. Check if clicking on active handle
-    const handleHit = hitTestHandle(pt);
-    if (handleHit && activeLayer) {
-      isInteracting.current = true;
-      dragMode.current = handleHit;
-      dragStartPos.current = pt;
-      layerStartPos.current = { x: activeLayer.x, y: activeLayer.y, scale: activeLayer.scale };
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-      return;
-    }
-
-    // 2. Click on canvas: find which layer was clicked (from top to bottom)
-    const reversed = [...layers].filter((l) => !l.deleted && l.visible).sort((a, b) => b.order - a.order);
-    let hitLayer: LayerItemState | null = null;
-
-    for (const layer of reversed) {
-      const cx = layer.x + resultWidth / 2;
-      const cy = layer.y + resultHeight / 2;
-      const halfW = (resultWidth / 2) * layer.scale;
-      const halfH = (resultHeight / 2) * layer.scale;
-
-      if (pt.x >= cx - halfW && pt.x <= cx + halfW && pt.y >= cy - halfH && pt.y <= cy + halfH) {
-        hitLayer = layer;
-        break;
-      }
-    }
-
-    if (hitLayer) {
-      setSelectedId(hitLayer.id);
-      isInteracting.current = true;
-      dragMode.current = "move";
-      dragStartPos.current = pt;
-      layerStartPos.current = { x: hitLayer.x, y: hitLayer.y, scale: hitLayer.scale };
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    } else {
-      setSelectedId(null);
-    }
+  const toggleDelete = (id: string) => {
+    update((prev) => prev.map((l) => (l.id === id ? { ...l, deleted: !l.deleted } : l)));
+    if (selectedId === id) setSelectedId(null);
   };
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isInteracting.current || !activeLayer || !dragMode.current) return;
-    const pt = getCanvasCoords(e.clientX, e.clientY);
-    const dx = pt.x - dragStartPos.current.x;
-    const dy = pt.y - dragStartPos.current.y;
-
-    if (dragMode.current === "move") {
-      setLayers((current) =>
-        current.map((l) =>
-          l.id === activeLayer.id
-            ? { ...l, x: layerStartPos.current.x + dx, y: layerStartPos.current.y + dy }
-            : l
-        )
-      );
-    } else if (dragMode.current.startsWith("resize-")) {
-      // Calculate scale change from center
-      const cx = layerStartPos.current.x + resultWidth / 2;
-      const cy = layerStartPos.current.y + resultHeight / 2;
-      const initialDist = Math.hypot(dragStartPos.current.x - cx, dragStartPos.current.y - cy);
-      const currentDist = Math.hypot(pt.x - cx, pt.y - cy);
-
-      if (initialDist > 0) {
-        const factor = currentDist / initialDist;
-        const newScale = Math.max(0.2, Math.min(3.5, layerStartPos.current.scale * factor));
-        setLayers((current) =>
-          current.map((l) => (l.id === activeLayer.id ? { ...l, scale: Number(newScale.toFixed(2)) } : l))
-        );
-      }
-    }
+  const moveOrder = (id: string, direction: "up" | "down") => {
+    update((prev) => {
+      const sorted = [...prev].sort((a, b) => a.order - b.order);
+      const index = sorted.findIndex((l) => l.id === id);
+      const target = direction === "up" ? index + 1 : index - 1;
+      if (index === -1 || target < 0 || target >= sorted.length) return prev;
+      const a = sorted[index];
+      const b = sorted[target];
+      return prev.map((l) => (l.id === a.id ? { ...l, order: b.order } : l.id === b.id ? { ...l, order: a.order } : l));
+    });
   };
 
-  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    isInteracting.current = false;
-    dragMode.current = null;
-    try {
-      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch {
-      // Ignore
-    }
-  };
-
-  // Keyboard navigation (Nudge with arrows, Delete key)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!selectedId) return;
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
-      const step = e.shiftKey ? 10 : 2;
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        setLayers((curr) => curr.map((l) => (l.id === selectedId ? { ...l, x: l.x - step } : l)));
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        setLayers((curr) => curr.map((l) => (l.id === selectedId ? { ...l, x: l.x + step } : l)));
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setLayers((curr) => curr.map((l) => (l.id === selectedId ? { ...l, y: l.y - step } : l)));
-      } else if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setLayers((curr) => curr.map((l) => (l.id === selectedId ? { ...l, y: l.y + step } : l)));
-      } else if (e.key === "Delete" || e.key === "Backspace") {
-        e.preventDefault();
-        toggleDelete(selectedId);
-      } else if (e.key === "Escape") {
-        onClose();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, selectedId]);
-
-  // Operations on layers
-  const toggleVisibility = (id: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setLayers((curr) => curr.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l)));
-  };
-
-  const toggleDelete = (id: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setLayers((curr) => curr.map((l) => (l.id === id ? { ...l, deleted: !l.deleted } : l)));
-    if (selectedId === id) {
-      setSelectedId(null);
-    }
-  };
-
-  const updateScale = (val: number) => {
-    if (!selectedId) return;
-    setLayers((curr) => curr.map((l) => (l.id === selectedId ? { ...l, scale: val } : l)));
-  };
-
-  const updateOpacity = (val: number) => {
-    if (!selectedId) return;
-    setLayers((curr) => curr.map((l) => (l.id === selectedId ? { ...l, opacity: val } : l)));
-  };
+  const textHeight = (layer: TextLayerItem) => layoutText(layer).box.height;
 
   const centerSelected = () => {
-    if (!selectedId) return;
-    setLayers((curr) => curr.map((l) => (l.id === selectedId ? { ...l, x: 0, y: 0 } : l)));
+    if (!activeLayer) return;
+    if (activeLayer.kind === "image") patchLayer(activeLayer.id, { x: 0, y: 0 });
+    else patchLayer(activeLayer.id, { x: Math.round((W - activeLayer.width) / 2), y: Math.round((H - textHeight(activeLayer)) / 2) });
   };
 
   const resetSelected = () => {
-    if (!selectedId) return;
-    setLayers((curr) => curr.map((l) => (l.id === selectedId ? { ...l, x: 0, y: 0, scale: 1, opacity: 1, visible: true, deleted: false } : l)));
-  };
-
-  const resetAll = () => {
-    setLayers((curr) =>
-      curr.map((l) => ({
-        ...l,
-        x: 0,
-        y: 0,
-        scale: 1,
-        opacity: 1,
-        visible: true,
-        deleted: false,
-      }))
-    );
-  };
-
-  const moveOrder = (id: string, direction: "up" | "down", e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setLayers((curr) => {
-      const sorted = [...curr].sort((a, b) => a.order - b.order);
-      const index = sorted.findIndex((l) => l.id === id);
-      if (index === -1) return curr;
-
-      const targetIndex = direction === "up" ? index + 1 : index - 1;
-      if (targetIndex < 0 || targetIndex >= sorted.length) return curr;
-
-      // Swap orders
-      const currentOrder = sorted[index].order;
-      const targetOrder = sorted[targetIndex].order;
-
-      return curr.map((l) => {
-        if (l.id === sorted[index].id) return { ...l, order: targetOrder };
-        if (l.id === sorted[targetIndex].id) return { ...l, order: currentOrder };
-        return l;
-      });
-    });
-  };
-
-  // Re-separate AI
-  const handleReseparate = async () => {
-    if (!onReseparate || reseparating) return;
-    try {
-      setReseparating(true);
-      const newLayers = await onReseparate();
-      initLayers(newLayers);
-    } catch {
-      // Handled by parent
-    } finally {
-      setReseparating(false);
+    if (!activeLayer) return;
+    const original = sourceLayers.current.find((l) => l.id === activeLayer.id);
+    if (original) {
+      update((prev) => prev.map((l) => (l.id === original.id ? { ...original, order: l.order } : l)));
+    } else if (activeLayer.kind === "image") {
+      patchLayer(activeLayer.id, { x: 0, y: 0, scale: 1, opacity: 1, visible: true, deleted: false });
     }
   };
 
-  // Compose & Save
-  const handleSave = async () => {
-    if (saving) return;
-    setSaving(true);
-    try {
-      // Create high-res offscreen canvas
-      const offscreen = document.createElement("canvas");
-      offscreen.width = resultWidth;
-      offscreen.height = resultHeight;
-      const ctx = offscreen.getContext("2d");
-      if (!ctx) throw new Error("Canvas context init failed");
+  const resetAll = () => {
+    update(() => sourceLayers.current);
+    setSelectedId(null);
+  };
 
-      const renderList = [...layers]
-        .filter((l) => !l.deleted && l.visible && l.loaded && l.image)
-        .sort((a, b) => a.order - b.order);
+  const duplicateText = (id: string) => {
+    const source = layers.find((l) => l.id === id);
+    if (!source || source.kind !== "text") return;
+    const copy: TextLayerItem = { ...source, id: newLocalId("text"), x: source.x + 24, y: source.y + 24, order: source.order + 0.5, deleted: false, visible: true };
+    update((prev) => normalizeOrders([...prev, copy]));
+    setSelectedId(copy.id);
+  };
 
-      for (const layer of renderList) {
-        if (!layer.image) continue;
-        ctx.save();
-        ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity));
+  /* ---------------------------------------------------------------- */
+  /* Matnni joyida tahrirlash                                          */
+  /* ---------------------------------------------------------------- */
 
-        const w = resultWidth;
-        const h = resultHeight;
-        const cx = layer.x + w / 2;
-        const cy = layer.y + h / 2;
+  const startEditing = (layer: TextLayerItem) => {
+    setSelectedId(layer.id);
+    editingRef.current = layer.id;
+    draftRef.current = layer.text;
+    setEditDraft(layer.text);
+    setEditingId(layer.id);
+  };
 
-        ctx.translate(cx, cy);
-        ctx.scale(layer.scale, layer.scale);
-        ctx.drawImage(layer.image, -w / 2, -h / 2, w, h);
-
-        ctx.restore();
+  const finishEditing = (mode: "commit" | "cancel") => {
+    const id = editingRef.current;
+    if (!id) return;
+    editingRef.current = null;
+    setEditingId(null);
+    const isNew = pendingNewRef.current === id;
+    pendingNewRef.current = null;
+    const draft = draftRef.current;
+    if (mode === "cancel" || !draft.trim()) {
+      if (isNew) {
+        // Yangi qatlam: qo'shilishini ham bekor qilamiz (tarixda iz qolmaydi).
+        history.undo();
+        setSelectedId(null);
+      } else if (mode === "commit") {
+        // Matn butunlay o'chirildi — qatlamni o'chirilgan deb belgilaymiz (tiklash mumkin).
+        update((prev) => prev.map((l) => (l.id === id ? { ...l, deleted: true } : l)));
+        setSelectedId(null);
       }
+      return;
+    }
+    const current = layers.find((l) => l.id === id);
+    if (current && current.kind === "text" && current.text !== draft) patchText(id, { text: draft });
+  };
 
-      const dataUrl = offscreen.toDataURL("image/png");
-      await onSave(dataUrl);
+  const addText = () => {
+    const fontSize = Math.round(W * 0.065);
+    const width = Math.round(W * 0.7);
+    const text = t("magicLayers.newText");
+    const maxOrder = layers.reduce((m, l) => Math.max(m, l.order), 0);
+    const layer: TextLayerItem = {
+      kind: "text",
+      id: newLocalId("text"),
+      name: text,
+      order: maxOrder + 1,
+      text,
+      x: Math.round((W - width) / 2),
+      y: Math.round(H / 2 - fontSize * 0.6),
+      width,
+      height: Math.round(fontSize * 1.15),
+      fontSize,
+      fontWeight: 700,
+      color: "#111111",
+      align: "center",
+      fontFamily: "Inter",
+      lineHeight: 1.15,
+      uppercase: false,
+      background: null,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      deleted: false,
+    };
+    if (editingRef.current) finishEditing("commit");
+    update((prev) => [...prev, layer]);
+    pendingNewRef.current = layer.id;
+    startEditing(layer);
+  };
+
+  useEffect(() => {
+    if (!editingId) return;
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    el.select();
+  }, [editingId]);
+
+  /* ---------------------------------------------------------------- */
+  /* Kursor / barmoq                                                   */
+  /* ---------------------------------------------------------------- */
+
+  const getCanvasCoords = (clientX: number, clientY: number): Point => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return { x: ((clientX - rect.left) * W) / rect.width, y: ((clientY - rect.top) * H) / rect.height };
+  };
+
+  const beginInteraction = (e: React.PointerEvent<HTMLCanvasElement>, layer: EditorLayer, mode: Interaction["mode"], handle: HandleId | null, pt: Point) => {
+    interaction.current = { pointerId: e.pointerId, mode, handle, layerId: layer.id, startPt: pt, start: layer, snapshot: layers, moved: false };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    if (editingRef.current) {
+      // Birinchi bosish — tahrirlashni tugatish.
+      finishEditing("commit");
+      return;
+    }
+    const pt = getCanvasCoords(e.clientX, e.clientY);
+    const touch = e.pointerType !== "mouse";
+    const hitRadius = (touch || coarsePointer ? 24 : 12) * unit;
+
+    if (activeLayer && activeLayer.visible) {
+      const handle = hitHandle(activeLayer, pt, W, H, hitRadius);
+      if (handle) {
+        beginInteraction(e, activeLayer, "resize", handle, pt);
+        return;
+      }
+    }
+
+    const hit = hitTestLayers(layers, pt, { width: W, height: H, images, alpha: alphaCache.current, textSlop: (touch ? 10 : 3) * unit });
+    if (!hit) {
+      setSelectedId(null);
+      lastTap.current = null;
+      return;
+    }
+
+    const now = Date.now();
+    if (hit.kind === "text" && lastTap.current?.id === hit.id && now - lastTap.current.at < DOUBLE_TAP_MS) {
+      lastTap.current = null;
+      e.preventDefault();
+      startEditing(hit);
+      return;
+    }
+    lastTap.current = { id: hit.id, at: now };
+    setSelectedId(hit.id);
+    beginInteraction(e, hit, "move", null, pt);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const it = interaction.current;
+    if (!it || it.pointerId !== e.pointerId) return;
+    const pt = getCanvasCoords(e.clientX, e.clientY);
+    const dx = pt.x - it.startPt.x;
+    const dy = pt.y - it.startPt.y;
+    if (!it.moved) {
+      if (Math.hypot(dx, dy) < 3 * unit) return;
+      it.moved = true;
+      lastTap.current = null;
+    }
+
+    const start = it.start;
+    let patch: Partial<EditorLayer>;
+    if (it.mode === "move") {
+      patch = { x: Math.round(start.x + dx), y: Math.round(start.y + dy) };
+    } else if (start.kind === "image") {
+      const cx = start.x + W / 2;
+      const cy = start.y + H / 2;
+      const initialDist = Math.hypot(it.startPt.x - cx, it.startPt.y - cy);
+      if (initialDist <= 0) return;
+      const factor = Math.hypot(pt.x - cx, pt.y - cy) / initialDist;
+      patch = { scale: Number(Math.max(0.2, Math.min(3.5, start.scale * factor)).toFixed(3)) };
+    } else {
+      const local = rotateVector({ x: dx, y: dy }, start.rotation);
+      const handle = it.handle;
+      if (handle === "e" || handle === "w") {
+        const raw = handle === "e" ? start.width + local.x : start.width - local.x;
+        const width = Math.max(MIN_TEXT_WIDTH, Math.min(W * 3, raw));
+        patch = { width: Math.round(width), x: Math.round(handle === "w" ? start.x + start.width - width : start.x) };
+      } else {
+        const east = handle === "ne" || handle === "se";
+        const north = handle === "nw" || handle === "ne";
+        const raw = east ? start.width + local.x : start.width - local.x;
+        const minFactor = Math.max(MIN_TEXT_WIDTH / start.width, MIN_FONT / start.fontSize);
+        const maxFactor = Math.min((W * 3) / start.width, MAX_FONT / start.fontSize);
+        const factor = Math.max(minFactor, Math.min(maxFactor, raw / start.width));
+        const width = start.width * factor;
+        const startHeight = textHeight(start);
+        patch = {
+          width: Math.round(width),
+          fontSize: Math.round(start.fontSize * factor * 10) / 10,
+          height: Math.round(start.height * factor),
+          x: Math.round(east ? start.x : start.x + start.width - width),
+          y: Math.round(north ? start.y + startHeight * (1 - factor) : start.y),
+        };
+      }
+    }
+    update((prev) => prev.map((l) => (l.id === it.layerId ? ({ ...l, ...patch } as EditorLayer) : l)), { transient: true });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const it = interaction.current;
+    if (!it || it.pointerId !== e.pointerId) return;
+    interaction.current = null;
+    if (it.moved) commitFrom(it.snapshot);
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+
+  /* ---------------------------------------------------------------- */
+  /* Chiqish, saqlash, yuklab olish                                    */
+  /* ---------------------------------------------------------------- */
+
+  const busy = saving || downloading || reseparating;
+  const imagesReady = Object.values(loadStates).every((s) => s !== "loading");
+  const dirty = history.dirty;
+
+  const requestExit = (action: () => void) => {
+    let pendingEdit = false;
+    if (editingRef.current) {
+      const editing = layers.find((l) => l.id === editingRef.current);
+      pendingEdit = editing?.kind === "text" && editing.text !== draftRef.current;
+      finishEditing("commit");
+    }
+    if (!dirty && !pendingEdit) {
+      action();
+      return;
+    }
+    setConfirm({
+      title: t("magicLayers.unsavedTitle"),
+      message: t("magicLayers.unsavedText"),
+      confirmLabel: t("magicLayers.leave"),
+      action,
+    });
+  };
+
+  const handleBack = () => requestExit(() => (onBack ?? onClose)());
+  const handleClose = () => requestExit(onClose);
+
+  const exportError = (reason: unknown) =>
+    reason instanceof Error && reason.message === "TAINTED" ? t("magicLayers.exportTainted") : t("magicLayers.exportFailed");
+
+  const compose = () => composeScene({ width: W, height: H, layers, images });
+
+  const handleSave = async () => {
+    if (busy) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const dataUrl = canvasToDataUrl(await compose());
+      const result = await onSave(dataUrl);
+      if (result === false) {
+        setError(t("magicLayers.saveFailed"));
+        return;
+      }
+      history.markSaved();
       onClose();
-    } catch {
-      // Handled
+    } catch (reason) {
+      setError(reason instanceof Error && reason.message === "TAINTED" ? t("magicLayers.exportTainted") : t("magicLayers.saveFailed"));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
+    if (busy) return;
+    setDownloading(true);
+    setError(null);
     try {
-      const offscreen = document.createElement("canvas");
-      offscreen.width = resultWidth;
-      offscreen.height = resultHeight;
-      const ctx = offscreen.getContext("2d");
-      if (!ctx) return;
-
-      const renderList = [...layers]
-        .filter((l) => !l.deleted && l.visible && l.loaded && l.image)
-        .sort((a, b) => a.order - b.order);
-
-      for (const layer of renderList) {
-        if (!layer.image) continue;
-        ctx.save();
-        ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity));
-
-        const w = resultWidth;
-        const h = resultHeight;
-        const cx = layer.x + w / 2;
-        const cy = layer.y + h / 2;
-
-        ctx.translate(cx, cy);
-        ctx.scale(layer.scale, layer.scale);
-        ctx.drawImage(layer.image, -w / 2, -h / 2, w, h);
-
-        ctx.restore();
-      }
-
-      offscreen.toBlob((blob) => {
-        if (!blob) return;
-        const blobUrl = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = blobUrl;
-        link.download = `naslai-magic-layers-${variant}.png`;
-        document.body.append(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
-      }, "image/png");
-    } catch {
-      // Handled
+      const blob = await canvasToBlob(await compose());
+      const filename = `naslai-${variant}-slayd-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.png`;
+      const outcome = await downloadBlob(blob, filename);
+      if (outcome === "needs-gesture") setDownloadSheet({ blob, filename });
+      else if (outcome !== "cancelled") setToast(t("magicLayers.downloaded"));
+    } catch (reason) {
+      setError(exportError(reason));
+    } finally {
+      setDownloading(false);
     }
   };
 
-  // List of layers sorted descending by order for the sidebar (top layer shown first)
+  const runReseparate = async () => {
+    if (!onReseparate || busy) return;
+    try {
+      setReseparating(true);
+      setError(null);
+      const source = await onReseparate();
+      loadSource(source.layers, source.textLayers ?? []);
+      setTextRemoved(source.textRemoved);
+    } catch {
+      // Xabar ota komponentda (createFlow notice) ko'rsatiladi.
+    } finally {
+      setReseparating(false);
+    }
+  };
+
+  const handleReseparate = () => {
+    if (!dirty) {
+      void runReseparate();
+      return;
+    }
+    setConfirm({
+      title: t("magicLayers.unsavedTitle"),
+      message: t("magicLayers.reseparateConfirm"),
+      confirmLabel: t("magicLayers.reseparate"),
+      action: () => void runReseparate(),
+    });
+  };
+
+  /* ---------------------------------------------------------------- */
+  /* Klaviatura                                                        */
+  /* ---------------------------------------------------------------- */
+
+  const keyHandler = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  keyHandler.current = (e: KeyboardEvent) => {
+    if (confirm || downloadSheet || editingRef.current) return;
+    if (isTypingTarget(e.target)) return;
+    const mod = e.ctrlKey || e.metaKey;
+    const keyZ = e.code === "KeyZ" || e.key.toLowerCase() === "z";
+    const keyY = e.code === "KeyY" || e.key.toLowerCase() === "y";
+    const keyD = e.code === "KeyD" || e.key.toLowerCase() === "d";
+
+    if (mod && keyZ) {
+      e.preventDefault();
+      if (e.shiftKey) history.redo(); else history.undo();
+      return;
+    }
+    if (mod && keyY) {
+      e.preventDefault();
+      history.redo();
+      return;
+    }
+    if (busy) return;
+
+    if (!activeLayer) {
+      if (e.key === "Escape") { e.preventDefault(); handleClose(); }
+      return;
+    }
+    if (mod && keyD && activeLayer.kind === "text") {
+      e.preventDefault();
+      duplicateText(activeLayer.id);
+      return;
+    }
+    const step = e.shiftKey ? 10 : 2;
+    const nudges: Record<string, Point> = { ArrowLeft: { x: -step, y: 0 }, ArrowRight: { x: step, y: 0 }, ArrowUp: { x: 0, y: -step }, ArrowDown: { x: 0, y: step } };
+    const nudge = nudges[e.key];
+    if (nudge) {
+      e.preventDefault();
+      patchLayer(activeLayer.id, { x: activeLayer.x + nudge.x, y: activeLayer.y + nudge.y }, `nudge:${activeLayer.id}`);
+    } else if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      toggleDelete(activeLayer.id);
+    } else if (e.key === "Enter" && activeLayer.kind === "text") {
+      e.preventDefault();
+      startEditing(activeLayer);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setSelectedId(null);
+    }
+  };
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => keyHandler.current(e);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
+
+  /* ---------------------------------------------------------------- */
+  /* Textarea joylashuvi                                               */
+  /* ---------------------------------------------------------------- */
+
+  const textareaStyle = useMemo<CSSProperties | null>(() => {
+    if (!editingLayer || cssWidth <= 0) return null;
+    const r = cssWidth / W; // 1 kanvas px necha CSS px
+    const layout = layoutText(editingLayer, editDraft || " ");
+    const cssFont = editingLayer.fontSize * r;
+    // iOS 16px dan kichik shriftli maydonga fokusda sahifani kattalashtiradi —
+    // shuning uchun kamida 16px bilan yozib, transform bilan kichraytiramiz.
+    const k = cssFont < 16 ? cssFont / 16 : 1;
+    const outerW = layout.outer.width * r;
+    const outerH = Math.max(layout.outer.height, layout.lineHeightPx) * r;
+    const centerX = (layout.outer.x + layout.outer.width / 2) * r;
+    const centerY = (layout.outer.y + Math.max(layout.outer.height, layout.lineHeightPx) / 2) * r;
+    return {
+      left: centerX - outerW / k / 2,
+      top: centerY - outerH / k / 2,
+      width: outerW / k,
+      height: outerH / k,
+      padding: `${(layout.padY * r) / k}px ${(layout.padX * r) / k}px`,
+      fontFamily: fontStack(editingLayer.fontFamily),
+      fontWeight: editingLayer.fontWeight,
+      fontSize: cssFont / k,
+      lineHeight: editingLayer.lineHeight,
+      color: editingLayer.color,
+      textAlign: editingLayer.align,
+      textTransform: editingLayer.uppercase ? "uppercase" : "none",
+      background: editingLayer.background ?? "transparent",
+      borderRadius: (editingLayer.fontSize * 0.3 * r) / k,
+      opacity: editingLayer.opacity,
+      transform: `rotate(${editingLayer.rotation}deg) scale(${k})`,
+    };
+  }, [cssWidth, editDraft, editingLayer, W]);
+
+  /* ---------------------------------------------------------------- */
+  /* Ko'rinish                                                         */
+  /* ---------------------------------------------------------------- */
+
   const displayLayers = [...layers].sort((a, b) => b.order - a.order);
+  const textCount = layers.filter((l) => l.kind === "text" && !l.deleted).length;
 
   return (
     <div className="magic-layers-backdrop" role="dialog" aria-modal="true" aria-labelledby="magic-editor-title">
-      {/* Top Header */}
       <header className="magic-layers-header">
         <div className="magic-header-left">
+          <button type="button" className="magic-btn magic-btn-secondary magic-back-btn" onClick={handleBack} disabled={saving} aria-label={t("magicLayers.backAria")}>
+            <span aria-hidden="true">←</span>
+            <span className="magic-btn-label">{t("magicLayers.back")}</span>
+          </button>
           <span className="magic-brand-badge">✨ {t("magicLayers.badge")}</span>
           <div className="magic-header-titles">
             <h2 id="magic-editor-title">
-              {t("magicLayers.modalTitle")} · {variant}-slayd
+              <span className="magic-title-long">{t("magicLayers.modalTitle")} · </span>{variant}-slayd
             </h2>
             <p>{t("magicLayers.modalSubtitle")}</p>
           </div>
@@ -535,75 +725,82 @@ export function MagicLayersEditor({
 
         <div className="magic-header-actions">
           {onReseparate && (
-            <button
-              type="button"
-              className="magic-btn magic-btn-secondary"
-              onClick={handleReseparate}
-              disabled={reseparating || saving}
-            >
-              🔄 {reseparating ? t("magicLayers.reseparating") : t("magicLayers.reseparate")}
+            <button type="button" className="magic-btn magic-btn-secondary" onClick={handleReseparate} disabled={busy} title={t("magicLayers.reseparate")}>
+              <span aria-hidden="true">🔄</span>
+              <span className="magic-btn-label">{reseparating ? t("magicLayers.reseparating") : t("magicLayers.reseparate")}</span>
             </button>
           )}
-
-          <button
-            type="button"
-            className="magic-btn magic-btn-secondary"
-            onClick={resetAll}
-            disabled={saving}
-          >
-            ↺ {t("magicLayers.resetAll")}
+          <button type="button" className="magic-btn magic-btn-secondary magic-hide-sm" onClick={resetAll} disabled={busy} title={t("magicLayers.resetAll")}>
+            <span aria-hidden="true">↺</span>
+            <span className="magic-btn-label">{t("magicLayers.resetAll")}</span>
           </button>
-
-          <button
-            type="button"
-            className="magic-btn magic-btn-secondary"
-            onClick={handleDownload}
-            disabled={saving}
-            title={t("magicLayers.download")}
-          >
-            ⬇ {t("magicLayers.download")}
+          <button type="button" className="magic-btn magic-btn-download" onClick={() => void handleDownload()} disabled={busy || !imagesReady} title={t("magicLayers.download")}>
+            <span aria-hidden="true">⬇</span>
+            <span className="magic-btn-label">{downloading ? t("magicLayers.downloadPreparing") : t("magicLayers.download")}</span>
           </button>
-
-          <button
-            type="button"
-            className="magic-btn magic-btn-primary"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            ✓ {saving ? t("magicLayers.saving") : t("magicLayers.save")}
+          <button type="button" className="magic-btn magic-btn-primary" onClick={() => void handleSave()} disabled={busy || !imagesReady} title={t("magicLayers.save")}>
+            <span aria-hidden="true">✓</span>
+            <span className="magic-btn-label">{saving ? t("magicLayers.saving") : t("magicLayers.save")}</span>
           </button>
-
-          <button
-            type="button"
-            className="magic-btn-icon"
-            onClick={onClose}
-            aria-label={t("magicLayers.close")}
-            disabled={saving}
-          >
-            ✕
-          </button>
+          <button type="button" className="magic-btn-icon" onClick={handleClose} aria-label={t("magicLayers.close")} disabled={saving}>✕</button>
         </div>
       </header>
 
-      {/* Main Studio Viewport */}
       <div className="magic-workspace">
-        {/* Canvas Area */}
         <section className="magic-canvas-container">
-          <div className="magic-canvas-hint-bar">
-            <span>💡</span> {t("magicLayers.dragHint")}
+          <div className="magic-toolbar" role="toolbar" aria-label={t("magicLayers.toolbarAria")}>
+            <button type="button" className="magic-btn magic-btn-primary magic-btn-sm" onClick={addText} disabled={busy}>
+              ＋ {t("magicLayers.addText")}
+            </button>
+            {activeLayer?.kind === "text" && !editingId ? (
+              <button type="button" className="magic-btn magic-btn-secondary magic-btn-sm" onClick={() => startEditing(activeLayer)}>
+                ✎ <span className="magic-btn-label">{t("magicLayers.editText")}</span>
+              </button>
+            ) : null}
+            <span className="magic-toolbar-sep" />
+            <button type="button" className="magic-btn magic-btn-secondary magic-btn-sm magic-btn-square" onClick={history.undo} disabled={!history.canUndo || busy} title={`${t("magicLayers.undo")} (Ctrl+Z)`} aria-label={t("magicLayers.undo")}>↶</button>
+            <button type="button" className="magic-btn magic-btn-secondary magic-btn-sm magic-btn-square" onClick={history.redo} disabled={!history.canRedo || busy} title={`${t("magicLayers.redo")} (Ctrl+Shift+Z)`} aria-label={t("magicLayers.redo")}>↷</button>
+            <span className="magic-toolbar-hint">💡 {editingId ? t("magicLayers.inlineHint") : t("magicLayers.dragHint")}</span>
           </div>
 
-          <div className="magic-canvas-wrapper">
-            <canvas
-              ref={canvasRef}
-              className="magic-canvas-element"
-              width={resultWidth}
-              height={resultHeight}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
-            />
+          {error ? (
+            <div className="magic-error-banner" role="alert">
+              <span>{error}</span>
+              <button type="button" className="magic-mini-btn" onClick={() => setError(null)} aria-label={t("magicLayers.close")}>✕</button>
+            </div>
+          ) : null}
+
+          <div className="magic-canvas-stage">
+            <div className="magic-canvas-wrapper">
+              <canvas
+                ref={canvasRef}
+                className="magic-canvas-element"
+                width={W}
+                height={H}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+                onContextMenu={(e) => e.preventDefault()}
+              />
+              {editingLayer && textareaStyle ? (
+                <textarea
+                  ref={textareaRef}
+                  className="magic-inline-textarea"
+                  style={textareaStyle}
+                  value={editDraft}
+                  spellCheck={false}
+                  aria-label={t("magicLayers.text")}
+                  onChange={(e) => { draftRef.current = e.target.value; setEditDraft(e.target.value); }}
+                  onBlur={() => finishEditing("commit")}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === "Escape") { e.preventDefault(); finishEditing("cancel"); }
+                    else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); finishEditing("commit"); }
+                  }}
+                />
+              ) : null}
+            </div>
           </div>
 
           {reseparating && (
@@ -615,17 +812,31 @@ export function MagicLayersEditor({
           )}
         </section>
 
-        {/* Right Sidebar */}
         <aside className="magic-sidebar">
-          {/* Active Layer Properties */}
-          {activeLayer ? (
+          {textRemoved === false ? (
+            <div className="magic-notice" role="note">
+              <b>ℹ {t("magicLayers.textNotRemovedTitle")}</b>
+              <span>{t("magicLayers.textNotRemovedText")}</span>
+            </div>
+          ) : null}
+
+          {activeLayer?.kind === "text" ? (
+            <TextLayerProps
+              layer={activeLayer}
+              onChange={(patch, coalesce) => patchText(activeLayer.id, patch, coalesce)}
+              onEditInline={() => startEditing(activeLayer)}
+              onDuplicate={() => duplicateText(activeLayer.id)}
+              onDelete={() => toggleDelete(activeLayer.id)}
+              onMoveUp={() => moveOrder(activeLayer.id, "up")}
+              onMoveDown={() => moveOrder(activeLayer.id, "down")}
+            />
+          ) : activeLayer?.kind === "image" ? (
             <div className="magic-layer-props">
               <div className="magic-section-title">
                 <span>{t("magicLayers.activeLayer")}</span>
                 <b>{activeLayer.name}</b>
               </div>
 
-              {/* Scale slider */}
               <div className="magic-prop-row">
                 <div className="magic-prop-header">
                   <span>{t("magicLayers.scale")}</span>
@@ -638,11 +849,10 @@ export function MagicLayersEditor({
                   max={2.5}
                   step={0.02}
                   value={activeLayer.scale}
-                  onChange={(e) => updateScale(parseFloat(e.target.value))}
+                  onChange={(e) => patchLayer(activeLayer.id, { scale: parseFloat(e.target.value) }, `scale:${activeLayer.id}`)}
                 />
               </div>
 
-              {/* Opacity slider */}
               <div className="magic-prop-row">
                 <div className="magic-prop-header">
                   <span>{t("magicLayers.opacity")}</span>
@@ -655,45 +865,21 @@ export function MagicLayersEditor({
                   max={1}
                   step={0.02}
                   value={activeLayer.opacity}
-                  onChange={(e) => updateOpacity(parseFloat(e.target.value))}
+                  onChange={(e) => patchLayer(activeLayer.id, { opacity: parseFloat(e.target.value) }, `opacity:${activeLayer.id}`)}
                 />
               </div>
 
-              {/* Layer Actions */}
               <div className="magic-action-grid">
-                <button
-                  type="button"
-                  className="magic-btn magic-btn-secondary"
-                  onClick={centerSelected}
-                >
-                  🎯 {t("magicLayers.centerLayer")}
-                </button>
-                <button
-                  type="button"
-                  className="magic-btn magic-btn-secondary"
-                  onClick={resetSelected}
-                >
-                  ↺ {t("magicLayers.resetSelected")}
-                </button>
-                <button
-                  type="button"
-                  className="magic-btn magic-btn-secondary"
-                  onClick={() => moveOrder(activeLayer.id, "up")}
-                >
-                  ▲ {t("magicLayers.moveUp")}
-                </button>
-                <button
-                  type="button"
-                  className="magic-btn magic-btn-secondary"
-                  onClick={() => moveOrder(activeLayer.id, "down")}
-                >
-                  ▼ {t("magicLayers.moveDown")}
-                </button>
+                <button type="button" className="magic-btn magic-btn-secondary" onClick={centerSelected}>🎯 {t("magicLayers.centerLayer")}</button>
+                <button type="button" className="magic-btn magic-btn-secondary" onClick={resetSelected}>↺ {t("magicLayers.resetSelected")}</button>
+                <button type="button" className="magic-btn magic-btn-secondary" onClick={() => moveOrder(activeLayer.id, "up")}>▲ {t("magicLayers.moveUp")}</button>
+                <button type="button" className="magic-btn magic-btn-secondary" onClick={() => moveOrder(activeLayer.id, "down")}>▼ {t("magicLayers.moveDown")}</button>
               </div>
             </div>
-          ) : null}
+          ) : (
+            <p className="magic-empty-hint">{textCount > 0 ? t("magicLayers.selectHintText") : t("magicLayers.selectHint")}</p>
+          )}
 
-          {/* Layer List */}
           <div>
             <div className="magic-section-title">
               <span>{t("magicLayers.layersTitle")}</span>
@@ -706,28 +892,44 @@ export function MagicLayersEditor({
                 return (
                   <div
                     key={layer.id}
-                    className={`magic-layer-item ${isSelected ? "is-active" : ""} ${
-                      !layer.visible || layer.deleted ? "is-hidden" : ""
-                    }`}
-                    onClick={() => {
-                      if (!layer.deleted) setSelectedId(layer.id);
+                    className={`magic-layer-item ${isSelected ? "is-active" : ""} ${!layer.visible || layer.deleted ? "is-hidden" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
+                    onClick={() => { if (!layer.deleted) setSelectedId(layer.id); }}
+                    onDoubleClick={() => { if (!layer.deleted && layer.kind === "text") startEditing(layer); }}
+                    onKeyDown={(e) => {
+                      if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget && !layer.deleted) {
+                        e.preventDefault();
+                        setSelectedId(layer.id);
+                      }
                     }}
                   >
-                    <img
-                      src={layer.url}
-                      alt={layer.name}
-                      className="magic-layer-thumb"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = "none";
-                      }}
-                    />
+                    {layer.kind === "text" ? (
+                      <span
+                        className="magic-layer-thumb is-text"
+                        aria-hidden="true"
+                        style={{ fontFamily: fontStack(layer.fontFamily), color: layer.color, background: layer.background ?? undefined }}
+                      >T</span>
+                    ) : (
+                      <img
+                        src={layer.url}
+                        alt={layer.name}
+                        className="magic-layer-thumb"
+                        onError={(e) => { (e.target as HTMLElement).style.visibility = "hidden"; }}
+                      />
+                    )}
                     <div className="magic-layer-info">
                       <div className="magic-layer-name">
-                        {layer.name}
-                        {layer.deleted && ` (${t("magicLayers.delete")})`}
+                        {layer.kind === "text" ? firstLine(layer.text) || t("magicLayers.textLayer") : layer.name}
+                        {layer.deleted && ` (${t("magicLayers.deleted")})`}
                       </div>
                       <div className="magic-layer-meta">
-                        {t("magicLayers.layerOrder")}: #{layer.order} · {Math.round(layer.scale * 100)}%
+                        {layer.kind === "text"
+                          ? `${t("magicLayers.textLayer")} · ${layer.fontFamily} · ${Math.round(layer.fontSize)}px`
+                          : `${t("magicLayers.layerOrder")}: #${layer.order} · ${Math.round(layer.scale * 100)}%`}
+                        {layer.kind === "image" && loadStates[layer.id] === "loading" ? ` · ${t("magicLayers.imageLoading")}` : ""}
+                        {layer.kind === "image" && loadStates[layer.id] === "error" ? ` · ${t("magicLayers.imageFailed")}` : ""}
                       </div>
                     </div>
 
@@ -736,7 +938,8 @@ export function MagicLayersEditor({
                         type="button"
                         className={`magic-mini-btn ${layer.visible ? "is-active" : ""}`}
                         title={layer.visible ? t("magicLayers.hide") : t("magicLayers.show")}
-                        onClick={(e) => toggleVisibility(layer.id, e)}
+                        aria-label={layer.visible ? t("magicLayers.hide") : t("magicLayers.show")}
+                        onClick={(e) => { e.stopPropagation(); toggleVisibility(layer.id); }}
                       >
                         {layer.visible ? "👁" : "🕶"}
                       </button>
@@ -744,7 +947,8 @@ export function MagicLayersEditor({
                         type="button"
                         className="magic-mini-btn"
                         title={layer.deleted ? t("magicLayers.restore") : t("magicLayers.delete")}
-                        onClick={(e) => toggleDelete(layer.id, e)}
+                        aria-label={layer.deleted ? t("magicLayers.restore") : t("magicLayers.delete")}
+                        onClick={(e) => { e.stopPropagation(); toggleDelete(layer.id); }}
                       >
                         {layer.deleted ? "↩" : "🗑"}
                       </button>
@@ -756,6 +960,23 @@ export function MagicLayersEditor({
           </div>
         </aside>
       </div>
+
+      {toast ? <div className="magic-toast" role="status">{toast}</div> : null}
+
+      {confirm ? (
+        <ConfirmDialog
+          title={confirm.title}
+          message={confirm.message}
+          confirmLabel={confirm.confirmLabel}
+          cancelLabel={t("magicLayers.stay")}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => { const action = confirm.action; setConfirm(null); action(); }}
+        />
+      ) : null}
+
+      {downloadSheet ? (
+        <DownloadReadySheet blob={downloadSheet.blob} filename={downloadSheet.filename} onClose={() => setDownloadSheet(null)} />
+      ) : null}
     </div>
   );
 }

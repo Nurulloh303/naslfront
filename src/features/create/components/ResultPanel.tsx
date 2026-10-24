@@ -1,9 +1,10 @@
 import { useEffect, useId, useState } from "react";
 import { AnalysisProgress } from "./AnalysisProgress";
 import { TextLayerEditor } from "./TextLayerEditor";
-import { MagicLayersEditor } from "./MagicLayersEditor";
+import { MagicLayersEditor, type MagicLayersSource } from "./MagicLayersEditor";
 import { ListingResult } from "./ListingBlocks";
-import type { ContentMode, GenerationJob, GenerationLayer } from "../domain/types";
+import type { ContentMode, GenerationJob } from "../domain/types";
+import type { SeparateLayersResponse } from "../services/createApi";
 import { useLanguage } from "../../../i18n/LanguageContext";
 
 type Props = {
@@ -24,7 +25,9 @@ type Props = {
   /** Brauzer yig'gan rasmni loyihaga saqlash. Token sarflanmaydi. */
   onComposeSlide?: (variant: number, imageDataUrl: string) => Promise<boolean> | void;
   /** AI orqali rasmni shaffof qatlamlarga ajratish (Magic Layers). */
-  onSeparateLayers?: (variant: number, options?: { numLayers?: number; force?: boolean }) => Promise<{ ok: boolean; variant: number; layers: GenerationLayer[]; job?: GenerationJob }>;
+  onSeparateLayers?: (variant: number, options?: { numLayers?: number; force?: boolean }) => Promise<SeparateLayersResponse>;
+  /** Magic Layers muharriridagi "← Orqaga": bosh sahifaga (karta yaratish) qaytish. */
+  onBack?: () => void;
   /** Тавсиф yozishda xatolik bo'lsa — qayta urinish. */
   onRetryListing?: () => void;
 };
@@ -145,7 +148,10 @@ function SlideFix({ variant, count, note, busy, disabled, onSubmit }: {
   </div>;
 }
 
-export function ResultPanel({ job, contentType, hasReference, onGenerate, onDownload, onEditSettings, onNewProject, onRate, onCancel, cancelling, onRegenerateSlide, onComposeSlide, onSeparateLayers, onRetryListing }: Props) {
+/** Joriy qatlamlar formati: matn qatlamlari bilan. Eskisi ochilganda qayta ajratiladi. */
+const LAYERS_VERSION = 2;
+
+export function ResultPanel({ job, contentType, hasReference, onGenerate, onDownload, onEditSettings, onNewProject, onRate, onCancel, cancelling, onRegenerateSlide, onComposeSlide, onSeparateLayers, onBack, onRetryListing }: Props) {
   const { t } = useLanguage();
   // Оценка хранится ПО ВАРИАНТАМ. Раньше состояние было одно на всю
   // панель, и оценка одного варианта подсвечивала звёзды у всех.
@@ -155,6 +161,8 @@ export function ResultPanel({ job, contentType, hasReference, onGenerate, onDown
   const [savingVariant, setSavingVariant] = useState<number | null>(null);
   // Magic Layers holati
   const [activeMagicVariant, setActiveMagicVariant] = useState<number | null>(null);
+  // Muharrir ochilgan paytdagi qatlamlar. Job keyinroq yangilansa ham muharrir o'zgarmaydi.
+  const [magicSource, setMagicSource] = useState<MagicLayersSource | null>(null);
   const [loadingLayersVariant, setLoadingLayersVariant] = useState<number | null>(null);
 
   const running = job.status === "submitting" || job.status === "queued" || job.status === "processing";
@@ -215,21 +223,39 @@ export function ResultPanel({ job, contentType, hasReference, onGenerate, onDown
     onRate?.(value);
   };
 
+  const openMagic = (variant: number, source: MagicLayersSource) => {
+    setMagicSource({ layers: source.layers, textLayers: source.textLayers ?? [], textRemoved: source.textRemoved });
+    setActiveMagicVariant(variant);
+  };
+
+  const closeMagic = () => {
+    setActiveMagicVariant(null);
+    setMagicSource(null);
+  };
+
   const handleOpenLayers = async (variant: number) => {
     const targetResult = job.results[variant - 1];
-    if (targetResult?.layers && targetResult.layers.length > 0) {
-      setActiveMagicVariant(variant);
+    const cached: MagicLayersSource | null = targetResult?.layers && targetResult.layers.length > 0
+      ? { layers: targetResult.layers, textLayers: targetResult.textLayers ?? [], textRemoved: targetResult.textRemoved }
+      : null;
+    // Yangi formatdagi (matn qatlamlari bor) natija — darhol ochamiz.
+    if (cached && targetResult.layersVersion === LAYERS_VERSION) {
+      openMagic(variant, cached);
       return;
     }
-    if (!onSeparateLayers) return;
+    if (!onSeparateLayers) {
+      if (cached) openMagic(variant, cached);
+      return;
+    }
+    // Qatlam yo'q yoki eski format (layersVersion !== 2) — qayta ajratamiz (force'siz).
     try {
       setLoadingLayersVariant(variant);
       const res = await onSeparateLayers(variant);
-      if (res.layers && res.layers.length > 0) {
-        setActiveMagicVariant(variant);
-      }
+      if (res.layers && res.layers.length > 0) openMagic(variant, res);
+      else if (cached) openMagic(variant, cached);
     } catch {
-      // Error is surfaced via notice in createFlow
+      // Xato createFlow notice orqali ko'rsatiladi; eski qatlamlar bo'lsa — ular bilan ochamiz.
+      if (cached) openMagic(variant, cached);
     } finally {
       setLoadingLayersVariant(null);
     }
@@ -266,14 +292,21 @@ export function ResultPanel({ job, contentType, hasReference, onGenerate, onDown
     {job.status === "success" ? <ListingSection job={job} onRetry={onRetryListing} /> : null}
 
     {/* Magic Layers Editor Modal */}
-    {activeMagicVariant !== null && onComposeSlide && job.results[activeMagicVariant - 1] && (
+    {activeMagicVariant !== null && magicSource && onComposeSlide && job.results[activeMagicVariant - 1] && (
       <MagicLayersEditor
+        key={`${job.id}-${activeMagicVariant}`}
         jobId={job.id}
         variant={activeMagicVariant}
-        initialLayers={job.results[activeMagicVariant - 1].layers || []}
+        initialLayers={magicSource.layers}
+        initialTextLayers={magicSource.textLayers}
+        textRemoved={magicSource.textRemoved}
         resultWidth={job.results[activeMagicVariant - 1].width}
         resultHeight={job.results[activeMagicVariant - 1].height}
-        onClose={() => setActiveMagicVariant(null)}
+        onClose={closeMagic}
+        onBack={() => {
+          closeMagic();
+          onBack?.();
+        }}
         onSave={(dataUrl) => {
           setSavingVariant(activeMagicVariant);
           return Promise.resolve(onComposeSlide(activeMagicVariant, dataUrl)).finally(() => {
@@ -282,7 +315,11 @@ export function ResultPanel({ job, contentType, hasReference, onGenerate, onDown
         }}
         onReseparate={
           onSeparateLayers
-            ? () => onSeparateLayers(activeMagicVariant, { force: true }).then((res) => res.layers)
+            ? () => onSeparateLayers(activeMagicVariant, { force: true }).then((res) => ({
+              layers: res.layers,
+              textLayers: res.textLayers ?? [],
+              textRemoved: res.textRemoved,
+            }))
             : undefined
         }
       />

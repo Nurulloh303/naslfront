@@ -341,7 +341,13 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
       } else if (result.layers) {
         const updatedResults = state.job.results.map((r, idx) => {
           if (idx + 1 === variant) {
-            return { ...r, layers: result.layers };
+            return {
+              ...r,
+              layers: result.layers,
+              textLayers: result.textLayers ?? [],
+              textRemoved: result.textRemoved,
+              layersVersion: result.layersVersion,
+            };
           }
           return r;
         });

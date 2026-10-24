@@ -145,6 +145,28 @@ export type GenerationLayer = {
   height?: number;
 };
 
+/**
+ * Tahrirlanadigan matn qatlami (Magic Layers v2).
+ * Koordinatalar — natija rasmining piksel fazosida, qutining yuqori-chap burchagi.
+ */
+export type GenerationTextLayer = {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontSize: number;
+  fontWeight: number;
+  color: string;
+  align: "left" | "center" | "right";
+  fontFamily: string;
+  lineHeight: number;
+  uppercase: boolean;
+  background: string | null;
+  rotation: number;
+};
+
 export type GenerationResult = {
   id: string;
   title: string;
@@ -170,6 +192,12 @@ export type GenerationResult = {
   composed?: boolean;
   /** AI ajratgan qatlamlar (Magic Layers). */
   layers?: GenerationLayer[];
+  /** Tahrirlanadigan matn qatlamlari. Eski keshlangan natijalarda yo'q — [] deb olinadi. */
+  textLayers?: GenerationTextLayer[];
+  /** Matn rastr qatlamlardan olib tashlanganmi. false — eski yozuv ostida ko'rinishi mumkin. */
+  textRemoved?: boolean;
+  /** Qatlamlar formati versiyasi. 2 — matn qatlamlari bilan. */
+  layersVersion?: number;
 };
 
 export type GenerationJob = {
