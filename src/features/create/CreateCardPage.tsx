@@ -345,7 +345,7 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
           <ResultPanel
             job={state.job}
             contentType={state.settings.contentType}
-            hasReference={Boolean(state.settings.designReferenceDataUrl || state.settings.designReferenceUrl || state.settings.stylePreset || state.settings.contentType === "copyStyle")}
+            hasReference={Boolean(state.settings.designReferenceDataUrl || state.settings.contentType === "copyStyle")}
             onGenerate={startGeneration}
             onDownload={flow.download}
             onEditSettings={() => setActiveStep(2)}
