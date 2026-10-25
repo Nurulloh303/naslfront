@@ -176,6 +176,31 @@ export type GenerationTextLayer = {
    * `cleanUrl` rasmidan nusxalanadi. Eski natijalarda yo'q.
    */
   source?: GenerationRect | null;
+  /**
+   * Magic Layers v4: asl yozuvning shaffof kesmasi (faqat harflar, RGBA PNG).
+   * `imageBox` joyiga chizilsa — asl rasm bilan piksel-ma-piksel bir xil.
+   * null — kesma yo'q, matn shrift bilan chiziladi.
+   */
+  imageUrl?: string | null;
+  /** Kesmaning rasmdagi joyi (rasm px). */
+  imageBox?: GenerationRect | null;
+};
+
+/**
+ * Magic Layers v4: rasmdan ajratilgan obyekt (mahsulot, ikonka, kartochka,
+ * belgi) — shaffof RGBA kesma. `x/y/width/height` — kesmaning rasmdagi joyi.
+ */
+export type GenerationElement = {
+  id: string;
+  name: string;
+  kind: "product" | "graphic";
+  url: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Z-tartib: 1 — eng pastki. */
+  order: number;
 };
 
 export type GenerationResult = {
@@ -213,6 +238,12 @@ export type GenerationResult = {
   baseUrl?: string;
   /** Magic Layers v3: matnsiz (toza) fon. null — tayyorlab bo'lmadi. */
   cleanUrl?: string | null;
+  /** Magic Layers v4: obyektlar va matnlarsiz fon (ostidagi joylar to'ldirilgan). */
+  backgroundUrl?: string;
+  /** Magic Layers v4: ajratilgan obyektlar. */
+  elements?: GenerationElement[];
+  /** Magic Layers v4: obyektlar fondan olib tashlanganmi. */
+  objectsRemoved?: boolean;
 };
 
 export type GenerationJob = {

@@ -1,6 +1,6 @@
 import { apiFetch } from "../../../app/apiClient";
 import { downloadFile } from "../../../app/downloadHelper";
-import type { GenerationJob, GenerationLayer, GenerationSettings, GenerationTextLayer, ProductAsset, ProductBrief, ProductListing, Quote, SlidePlan } from "../domain/types";
+import type { GenerationElement, GenerationJob, GenerationLayer, GenerationSettings, GenerationTextLayer, ProductAsset, ProductBrief, ProductListing, Quote, SlidePlan } from "../domain/types";
 
 type StartResponse = { job: GenerationJob; balance: number; idempotentReplay: boolean };
 export type CancelResponse = { job: GenerationJob; balance: number; refunded: number; delivered: number };
@@ -10,19 +10,23 @@ export type SeparateLayersOptions = {
   /** Mahsulot/fon kabi rastr qatlamlarni ham ajratish (ixtiyoriy). */
   separateObjects?: boolean;
 };
-/** Magic Layers v3 javobi (API kontrakti). */
+/** Magic Layers v4 javobi (API kontrakti). Barcha URL'lar mutlaq va CORS ochiq. */
 export type SeparateLayersResponse = {
-  /** Asl rasm — muharrirda o'zgarmaydigan asos. */
-  baseUrl: string;
-  /** Matnsiz toza fon. null — tayyorlab bo'lmadi. */
-  cleanUrl: string | null;
   width: number;
   height: number;
+  /** Asl rasm — "Asl rasm" bilan solishtirish uchun. */
+  baseUrl: string;
+  /** Obyektlar va matnlarsiz fon. */
+  backgroundUrl: string;
+  /** Ajratilgan obyektlar (RGBA kesmalar). */
+  elements: GenerationElement[];
   textLayers: GenerationTextLayer[];
-  /** Ixtiyoriy rastr qatlamlar (odatda bo'sh). */
-  layers: GenerationLayer[];
   textRemoved: boolean;
+  objectsRemoved: boolean;
   layersVersion: number;
+  /** v3 (eski) maydonlar — moslik uchun. */
+  cleanUrl?: string | null;
+  layers?: GenerationLayer[];
   ok?: boolean;
   variant?: number;
   job?: GenerationJob;

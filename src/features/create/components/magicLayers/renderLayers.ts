@@ -1,18 +1,18 @@
 /**
- * Magic Layers v3: kanvasga chizish, matnni joylash, geometriya va hit-test.
+ * Magic Layers v4: kanvasga chizish va matnni joylash.
  *
- * Sahna: asl rasm (o'zgarmaydi) → ixtiyoriy rastr qatlamlar → o'zgargan
- * matnlar ostidagi "yamoq" (toza fondan) → yangi matnlar. Tegilmagan matnlar
- * umuman chizilmaydi — asl piksellar ko'rinadi.
+ * Sahna: fon (rasm yoki rang) → obyektlar (RGBA kesmalar, `order` bo'yicha)
+ * → matnlar. Matn avval asl harflar kesmasi bilan chiziladi (piksel-ma-piksel
+ * asl rasm), o'zgargach — shrift bilan.
  *
  * React'siz toza funksiyalar — muharrir ham, eksport ham bir xil kod bilan
  * chizadi, shuning uchun ekranda ko'ringan narsa faylda ham aynan shunday.
  */
-import { isTextDirty, type EditorLayer, type ImageLayerItem, type TextLayerItem } from "./editorTypes";
+import { groupOf, usesCutout, type BackgroundState, type EditorLayer, type ElementItem, type TextLayerItem } from "./editorTypes";
 
 export type Point = { x: number; y: number };
 export type Rect = { x: number; y: number; width: number; height: number };
-export type HandleId = "nw" | "ne" | "se" | "sw" | "e" | "w";
+export type HandleId = "nw" | "ne" | "se" | "sw" | "e" | "w" | "rot";
 
 /* ------------------------------------------------------------------ */
 /* Shriftlar                                                           */
@@ -245,15 +245,26 @@ export function layoutText(layer: TextLayerItem, textOverride?: string): TextLay
     areaWidth: maxAdvance,
   };
 }
-
-/** Tegilmagan matn: asl rasmda turgan zich qutisi. */
-export function isUntouched(layer: TextLayerItem): boolean {
-  return Boolean(layer.pristine) && !isTextDirty(layer);
+/** Kesma rejimidagi matnning joriy qutisi: asl `imageBox`, joriy joy va masshtab bo'yicha. */
+export function cutoutRect(layer: TextLayerItem): Rect | null {
+  const box = layer.imageBox;
+  const p = layer.pristine;
+  if (!box || !p) return null;
+  const s = p.fontSize > 0 ? layer.fontSize / p.fontSize : 1;
+  return {
+    x: layer.x + (box.x - p.x) * s,
+    y: layer.y + (box.y - p.y) * s,
+    width: box.width * s,
+    height: box.height * s,
+  };
 }
 
-/** Tanlash/hit-test uchun quti. */
+/** Tanlash/hit-test uchun quti (aylantirilmagan; aylantirish — markaz atrofida). */
 export function textRect(layer: TextLayerItem): Rect {
-  if (isUntouched(layer)) return { x: layer.x, y: layer.y, width: layer.width, height: layer.height };
+  if (usesCutout(layer)) {
+    const r = cutoutRect(layer);
+    if (r) return r;
+  }
   return layoutText(layer).outer;
 }
 
@@ -261,7 +272,11 @@ export function textRect(layer: TextLayerItem): Rect {
 /* Chizish                                                             */
 /* ------------------------------------------------------------------ */
 
-function roundRectPath(ctx: CanvasRenderingContext2D, r: Rect, radius: number) {
+/** Yuklangan (CORS-xavfsiz) rasm. */
+export type Drawable = { image: CanvasImageSource; width: number; height: number };
+export type ImageMap = Record<string, Drawable | undefined>;
+
+export function roundRectPath(ctx: CanvasRenderingContext2D, r: Rect, radius: number) {
   const rad = Math.max(0, Math.min(radius, r.width / 2, r.height / 2));
   ctx.beginPath();
   ctx.moveTo(r.x + rad, r.y);
@@ -272,7 +287,7 @@ function roundRectPath(ctx: CanvasRenderingContext2D, r: Rect, radius: number) {
   ctx.closePath();
 }
 
-function applyRotation(ctx: CanvasRenderingContext2D, rect: Rect, degrees: number) {
+export function applyRotation(ctx: CanvasRenderingContext2D, rect: Rect, degrees: number) {
   if (!degrees) return;
   const cx = rect.x + rect.width / 2;
   const cy = rect.y + rect.height / 2;
@@ -281,6 +296,7 @@ function applyRotation(ctx: CanvasRenderingContext2D, rect: Rect, degrees: numbe
   ctx.translate(-cx, -cy);
 }
 
+/** Matnni shrift bilan chizadi. `glyphs: false` — faqat plashka (textarea ochiq). */
 export function drawTextItem(ctx: CanvasRenderingContext2D, layer: TextLayerItem, options: { glyphs?: boolean } = {}): void {
   const layout = layoutText(layer);
   ctx.save();
@@ -304,166 +320,85 @@ export function drawTextItem(ctx: CanvasRenderingContext2D, layer: TextLayerItem
   ctx.restore();
 }
 
-export function drawImageItem(ctx: CanvasRenderingContext2D, layer: ImageLayerItem, image: CanvasImageSource, width: number, height: number): void {
+/** Asl harflar kesmasini joriy joyi/masshtabi/burchagi bilan chizadi. */
+export function drawCutout(ctx: CanvasRenderingContext2D, layer: TextLayerItem, image: Drawable): void {
+  const r = cutoutRect(layer);
+  if (!r) return;
   ctx.save();
   ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity));
-  ctx.translate(layer.x + width / 2, layer.y + height / 2);
-  ctx.scale(layer.scale, layer.scale);
-  ctx.drawImage(image, -width / 2, -height / 2, width, height);
+  applyRotation(ctx, r, layer.rotation);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(image.image, r.x, r.y, r.width, r.height);
   ctx.restore();
 }
 
-function isReady(image: HTMLImageElement | undefined): image is HTMLImageElement {
-  return Boolean(image && image.complete && image.naturalWidth > 0);
-}
-
-function clipRect(r: Rect, width: number, height: number): Rect | null {
-  const x = Math.max(0, Math.floor(r.x));
-  const y = Math.max(0, Math.floor(r.y));
-  const right = Math.min(width, Math.ceil(r.x + r.width));
-  const bottom = Math.min(height, Math.ceil(r.y + r.height));
-  if (right <= x || bottom <= y) return null;
-  return { x, y, width: right - x, height: bottom - y };
-}
-
-function intersect(a: Rect, b: Rect): Rect | null {
-  const x = Math.max(a.x, b.x);
-  const y = Math.max(a.y, b.y);
-  const right = Math.min(a.x + a.width, b.x + b.width);
-  const bottom = Math.min(a.y + a.height, b.y + b.height);
-  if (right <= x || bottom <= y) return null;
-  return { x, y, width: right - x, height: bottom - y };
-}
-
-/** Rasmning `r` qismini kanvasning aynan shu joyiga ko'chiradi (rasm o'lchami boshqacha bo'lsa ham). */
-function copyRegion(ctx: CanvasRenderingContext2D, image: HTMLImageElement, r: Rect, width: number, height: number) {
-  const sx = image.naturalWidth / width;
-  const sy = image.naturalHeight / height;
-  ctx.drawImage(image, r.x * sx, r.y * sy, r.width * sx, r.height * sy, r.x, r.y, r.width, r.height);
+export function drawElement(ctx: CanvasRenderingContext2D, layer: ElementItem, image: Drawable): void {
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity));
+  ctx.translate(layer.x + layer.width / 2, layer.y + layer.height / 2);
+  if (layer.rotation) ctx.rotate((layer.rotation * Math.PI) / 180);
+  if (layer.flipX || layer.flipY) ctx.scale(layer.flipX ? -1 : 1, layer.flipY ? -1 : 1);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(image.image, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
+  ctx.restore();
 }
 
 export type SceneOptions = {
   width: number;
   height: number;
-  /** Asl rasm — o'zgarmaydigan asos. */
-  base?: HTMLImageElement;
-  /** Matnsiz toza fon (yamoqlar shundan olinadi). */
-  clean?: HTMLImageElement;
+  /** Fon rasmi (obyekt va matnlarsiz). */
+  backgroundImage?: Drawable;
+  background: BackgroundState;
   layers: EditorLayer[];
-  images: Record<string, HTMLImageElement | undefined>;
-  /** Toza fon bo'lmasa — yamoq rangi (asl rasm atrofidan olingan). */
-  fills?: Record<string, string>;
-  /** Shu matn ustida textarea ochiq: yamoq chiziladi, harflar — yo'q. */
+  /** URL → yuklangan rasm. */
+  images: ImageMap;
+  /** Shu matn ustida textarea ochiq: harflar chizilmaydi. */
   editingId?: string | null;
 };
 
-/** Butun sahna: asl rasm → rastr qatlamlar → yamoqlar → o'zgargan matnlar. */
+/** Butun sahna: fon → obyektlar → matnlar. Rasm yuklanmagan bo'lsa — hech narsa chizilmaydi (oq quti emas). */
 export function renderScene(ctx: CanvasRenderingContext2D, options: SceneOptions): void {
-  const { width, height, base, clean, layers, images, fills = {}, editingId } = options;
+  const { width, height, backgroundImage, background, layers, images, editingId } = options;
   ctx.clearRect(0, 0, width, height);
-  if (isReady(base)) ctx.drawImage(base, 0, 0, width, height);
-
-  const imageLayers = layers.filter((l): l is ImageLayerItem => l.kind === "image" && !l.deleted && l.visible).sort((a, b) => a.order - b.order);
-  let rasterDrawn = false;
-  for (const layer of imageLayers) {
-    const image = images[layer.id];
-    if (isReady(image)) {
-      drawImageItem(ctx, layer, image, width, height);
-      rasterDrawn = true;
+  if (background.visible) {
+    if (background.color) {
+      ctx.fillStyle = background.color;
+      ctx.fillRect(0, 0, width, height);
+    } else if (backgroundImage) {
+      ctx.drawImage(backgroundImage.image, 0, 0, width, height);
     }
   }
 
-  const texts = layers.filter((l): l is TextLayerItem => l.kind === "text").sort((a, b) => a.order - b.order);
-  const patched = texts.filter((t) => t.pristine && t.source && (isTextDirty(t) || t.id === editingId));
-  const patchRects: Rect[] = [];
-  for (const t of patched) {
-    const r = clipRect(t.source!, width, height);
-    if (!r) continue;
-    patchRects.push(r);
-    if (isReady(clean)) {
-      copyRegion(ctx, clean, r, width, height);
-    } else {
-      ctx.fillStyle = fills[t.id] ?? t.background ?? "#FFFFFF";
-      ctx.fillRect(r.x, r.y, r.width, r.height);
-    }
+  for (const layer of groupOf(layers, "element") as ElementItem[]) {
+    if (layer.deleted || !layer.visible) continue;
+    const image = images[layer.url];
+    if (image) drawElement(ctx, layer, image);
   }
 
-  // Yamoq qo'shni (tegilmagan) yozuvga tegib ketsa — uning asl piksellarini qaytaramiz.
-  if (patchRects.length && !rasterDrawn && isReady(base)) {
-    for (const t of texts) {
-      if (t.id === editingId || !isUntouched(t)) continue;
-      const pad = Math.max(2, t.fontSize * 0.06);
-      const own = clipRect({ x: t.x - pad, y: t.y - pad, width: t.width + pad * 2, height: t.height + pad * 2 }, width, height);
-      if (!own) continue;
-      for (const p of patchRects) {
-        const overlap = intersect(own, p);
-        if (overlap) copyRegion(ctx, base, overlap, width, height);
-      }
+  for (const layer of groupOf(layers, "text") as TextLayerItem[]) {
+    if (layer.deleted || !layer.visible) continue;
+    const editing = layer.id === editingId;
+    if (usesCutout(layer)) {
+      if (editing) continue;
+      const image = layer.imageUrl ? images[layer.imageUrl] : undefined;
+      // Kesma yuklanmagan bo'lsa — shrift bilan (banner foydalanuvchiga aytadi).
+      if (image) drawCutout(ctx, layer, image);
+      else drawTextItem(ctx, layer);
+      continue;
     }
-  }
-
-  for (const t of texts) {
-    if (t.deleted || !t.visible || isUntouched(t)) continue;
-    drawTextItem(ctx, t, { glyphs: t.id !== editingId });
+    drawTextItem(ctx, layer, { glyphs: !editing });
   }
 }
 
-/**
- * Toza fon bo'lmaganda: har matn `source` qutisi atrofidagi halqadan
- * (asl rasm) median rangni oladi. Kanvas CORS bilan ifloslangan bo'lsa — {}.
- */
-export function sampleFillColors(base: HTMLImageElement, width: number, height: number, texts: TextLayerItem[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  const targets = texts.filter((t) => t.pristine && t.source);
-  if (!targets.length) return out;
-  let data: Uint8ClampedArray;
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return out;
-    ctx.drawImage(base, 0, 0, width, height);
-    data = ctx.getImageData(0, 0, width, height).data;
-  } catch {
-    return out;
-  }
-  for (const t of targets) {
-    const s = t.source!;
-    const band = 4;
-    const rs: number[] = [];
-    const gs: number[] = [];
-    const bs: number[] = [];
-    const push = (x: number, y: number) => {
-      const px = Math.round(x);
-      const py = Math.round(y);
-      if (px < 0 || py < 0 || px >= width || py >= height) return;
-      const i = (py * width + px) * 4;
-      rs.push(data[i]); gs.push(data[i + 1]); bs.push(data[i + 2]);
-    };
-    const stepX = Math.max(1, s.width / 120);
-    const stepY = Math.max(1, s.height / 60);
-    for (let d = 1; d <= band; d += 1) {
-      for (let x = s.x - band; x <= s.x + s.width + band; x += stepX) {
-        push(x, s.y - d);
-        push(x, s.y + s.height + d - 1);
-      }
-      for (let y = s.y; y <= s.y + s.height; y += stepY) {
-        push(s.x - d, y);
-        push(s.x + s.width + d - 1, y);
-      }
-    }
-    if (!rs.length) continue;
-    const median = (values: number[]) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
-    const hex = (n: number) => n.toString(16).padStart(2, "0");
-    out[t.id] = `#${hex(median(rs))}${hex(median(gs))}${hex(median(bs))}`.toUpperCase();
-  }
-  return out;
+/** Faqat asl rasm ("Asl rasm" bilan solishtirish). */
+export function renderOriginal(ctx: CanvasRenderingContext2D, width: number, height: number, base: Drawable | undefined): void {
+  ctx.clearRect(0, 0, width, height);
+  if (base) ctx.drawImage(base.image, 0, 0, width, height);
 }
 
-/** To'liq o'lchamdagi yakuniy rasm (eksport uchun): asl rasm + yamoqlar + matnlar. */
+/** To'liq o'lchamdagi yakuniy rasm (eksport uchun). Shriftlar yuklanishini kutadi. */
 export async function composeScene(options: Omit<SceneOptions, "editingId">): Promise<HTMLCanvasElement> {
-  await ensureFonts(options.layers.filter((l): l is TextLayerItem => l.kind === "text" && !l.deleted && !isUntouched(l)));
+  await ensureFonts(options.layers.filter((l): l is TextLayerItem => l.kind === "text" && !l.deleted && l.visible && !usesCutout(l)));
   const canvas = document.createElement("canvas");
   canvas.width = options.width;
   canvas.height = options.height;
@@ -494,192 +429,4 @@ export function canvasToDataUrl(canvas: HTMLCanvasElement): string {
 
 function isSecurityError(error: unknown): boolean {
   return (error instanceof DOMException || error instanceof Error) && error.name === "SecurityError";
-}
-
-/* ------------------------------------------------------------------ */
-/* Geometriya va tanlash                                               */
-/* ------------------------------------------------------------------ */
-
-export function imageBounds(layer: ImageLayerItem, width: number, height: number): Rect {
-  const cx = layer.x + width / 2;
-  const cy = layer.y + height / 2;
-  return { x: cx - (width / 2) * layer.scale, y: cy - (height / 2) * layer.scale, width: width * layer.scale, height: height * layer.scale };
-}
-
-/** Nuqtani qatlamning (aylantirilmagan) lokal fazosiga o'tkazadi. */
-export function toLocal(pt: Point, rect: Rect, degrees: number): Point {
-  if (!degrees) return pt;
-  const cx = rect.x + rect.width / 2;
-  const cy = rect.y + rect.height / 2;
-  const rad = (-degrees * Math.PI) / 180;
-  const dx = pt.x - cx;
-  const dy = pt.y - cy;
-  return { x: cx + dx * Math.cos(rad) - dy * Math.sin(rad), y: cy + dx * Math.sin(rad) + dy * Math.cos(rad) };
-}
-
-export function rotateVector(v: Point, degrees: number): Point {
-  if (!degrees) return v;
-  const rad = (-degrees * Math.PI) / 180;
-  return { x: v.x * Math.cos(rad) - v.y * Math.sin(rad), y: v.x * Math.sin(rad) + v.y * Math.cos(rad) };
-}
-
-function inRect(pt: Point, r: Rect, slop = 0): boolean {
-  return pt.x >= r.x - slop && pt.x <= r.x + r.width + slop && pt.y >= r.y - slop && pt.y <= r.y + r.height + slop;
-}
-
-function handlePoints(r: Rect, withSides: boolean): Array<{ id: HandleId; x: number; y: number }> {
-  const points: Array<{ id: HandleId; x: number; y: number }> = [
-    { id: "nw", x: r.x, y: r.y },
-    { id: "ne", x: r.x + r.width, y: r.y },
-    { id: "se", x: r.x + r.width, y: r.y + r.height },
-    { id: "sw", x: r.x, y: r.y + r.height },
-  ];
-  if (withSides) {
-    points.push({ id: "e", x: r.x + r.width, y: r.y + r.height / 2 }, { id: "w", x: r.x, y: r.y + r.height / 2 });
-  }
-  return points;
-}
-
-export function selectionRect(layer: EditorLayer, width: number, height: number): Rect {
-  return layer.kind === "image" ? imageBounds(layer, width, height) : textRect(layer);
-}
-
-export function hitHandle(layer: EditorLayer, pt: Point, width: number, height: number, hitRadius: number): HandleId | null {
-  const rect = selectionRect(layer, width, height);
-  const local = layer.kind === "text" ? toLocal(pt, rect, layer.rotation) : pt;
-  for (const handle of handlePoints(rect, layer.kind === "text")) {
-    if (Math.hypot(local.x - handle.x, local.y - handle.y) <= hitRadius) return handle.id;
-  }
-  return null;
-}
-
-/**
- * Rastr qatlam pikselining shaffofligini tekshirish uchun kesh.
- * Kanvas CORS bilan ifloslangan bo'lsa — `null` (to'rtburchak bo'yicha tekshiriladi).
- */
-export class AlphaHitCache {
-  private entries = new Map<string, { data: Uint8ClampedArray; w: number; h: number } | "tainted">();
-
-  clear(): void {
-    this.entries.clear();
-  }
-
-  /** u, v — 0..1 oralig'idagi normallashtirilgan koordinatalar. */
-  probe(id: string, image: HTMLImageElement, u: number, v: number): boolean | null {
-    let entry = this.entries.get(id);
-    if (!entry) {
-      entry = this.build(image);
-      this.entries.set(id, entry);
-    }
-    if (entry === "tainted") return null;
-    if (u < 0 || v < 0 || u >= 1 || v >= 1) return false;
-    const { data, w, h } = entry;
-    const cx = Math.floor(u * w);
-    const cy = Math.floor(v * h);
-    for (let dy = -1; dy <= 1; dy += 1) {
-      for (let dx = -1; dx <= 1; dx += 1) {
-        const px = cx + dx;
-        const py = cy + dy;
-        if (px < 0 || py < 0 || px >= w || py >= h) continue;
-        if (data[(py * w + px) * 4 + 3] > 12) return true;
-      }
-    }
-    return false;
-  }
-
-  private build(image: HTMLImageElement): { data: Uint8ClampedArray; w: number; h: number } | "tainted" {
-    try {
-      const natW = image.naturalWidth || 1;
-      const natH = image.naturalHeight || 1;
-      const w = Math.max(1, Math.min(natW, 540));
-      const h = Math.max(1, Math.round((w * natH) / natW));
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (!ctx) return "tainted";
-      ctx.drawImage(image, 0, 0, w, h);
-      return { data: ctx.getImageData(0, 0, w, h).data, w, h };
-    } catch {
-      return "tainted";
-    }
-  }
-}
-
-/**
- * Nuqta ostidagi qatlam: avval matnlar (bir nechtasi ustma-ust bo'lsa —
- * eng kichigi, teng bo'lsa — eng yuqorisi), keyin rastr qatlamlar.
- */
-export function hitTestLayers(
-  layers: EditorLayer[],
-  pt: Point,
-  options: { width: number; height: number; images: Record<string, HTMLImageElement | undefined>; alpha: AlphaHitCache; textSlop?: number },
-): EditorLayer | null {
-  const visible = layers.filter((l) => !l.deleted && l.visible);
-  let best: { layer: TextLayerItem; area: number } | null = null;
-  for (const layer of visible) {
-    if (layer.kind !== "text") continue;
-    const rect = textRect(layer);
-    if (!inRect(toLocal(pt, rect, layer.rotation), rect, options.textSlop ?? 0)) continue;
-    const area = rect.width * rect.height;
-    if (!best || area < best.area - 1 || (Math.abs(area - best.area) <= 1 && layer.order > best.layer.order)) best = { layer, area };
-  }
-  if (best) return best.layer;
-
-  const images = visible.filter((l): l is ImageLayerItem => l.kind === "image").sort((a, b) => b.order - a.order);
-  for (const layer of images) {
-    const rect = imageBounds(layer, options.width, options.height);
-    if (!inRect(pt, rect)) continue;
-    const image = options.images[layer.id];
-    if (!image || !image.complete || !image.naturalWidth) continue;
-    const opaque = options.alpha.probe(layer.id, image, (pt.x - rect.x) / rect.width, (pt.y - rect.y) / rect.height);
-    if (opaque === null || opaque) return layer;
-  }
-  return null;
-}
-
-export const SELECTION_COLOR = "#ff4d1c";
-
-/** Tahrirlanadigan matn ko'rsatkichi: nozik shtrix ramka (har qanday fonda ko'rinadi). */
-export function drawOutline(ctx: CanvasRenderingContext2D, rect: Rect, rotation: number, unit: number, strong = false): void {
-  const pad = 4 * unit;
-  const r = { x: rect.x - pad, y: rect.y - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
-  ctx.save();
-  applyRotation(ctx, r, rotation);
-  ctx.lineWidth = (strong ? 2 : 1.5) * unit;
-  ctx.setLineDash([5 * unit, 4 * unit]);
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
-  ctx.strokeRect(r.x, r.y, r.width, r.height);
-  ctx.lineDashOffset = 4.5 * unit;
-  ctx.strokeStyle = strong ? SELECTION_COLOR : "rgba(255, 255, 255, 0.9)";
-  ctx.strokeRect(r.x, r.y, r.width, r.height);
-  ctx.restore();
-}
-
-/** Tanlangan qatlam ramkasi va tutqichlari. `unit` — 1 CSS px necha kanvas px. */
-export function drawSelection(ctx: CanvasRenderingContext2D, layer: EditorLayer, width: number, height: number, unit: number, handleRadiusCss = 7): void {
-  const rect = selectionRect(layer, width, height);
-  const rotation = layer.kind === "text" ? layer.rotation : 0;
-  ctx.save();
-  applyRotation(ctx, rect, rotation);
-  ctx.strokeStyle = SELECTION_COLOR;
-  ctx.lineWidth = 2 * unit;
-  ctx.setLineDash([6 * unit, 4 * unit]);
-  ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
-  ctx.setLineDash([]);
-
-  const radius = handleRadiusCss * unit;
-  ctx.fillStyle = "#ffffff";
-  ctx.lineWidth = 2 * unit;
-  for (const handle of handlePoints(rect, layer.kind === "text")) {
-    ctx.beginPath();
-    if (handle.id === "e" || handle.id === "w") {
-      roundRectPath(ctx, { x: handle.x - radius * 0.55, y: handle.y - radius * 1.5, width: radius * 1.1, height: radius * 3 }, radius * 0.55);
-    } else {
-      ctx.arc(handle.x, handle.y, radius, 0, Math.PI * 2);
-    }
-    ctx.fill();
-    ctx.stroke();
-  }
-  ctx.restore();
 }

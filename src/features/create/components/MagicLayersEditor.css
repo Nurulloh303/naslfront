@@ -1159,3 +1159,219 @@ a.magic-btn {
     display: none;
   }
 }
+
+/* ============================================================
+   v4: fon + obyektlar + matn qatlamlari (Canva Magic Layers)
+   ============================================================ */
+.magic-btn.is-on {
+  background: rgba(255, 77, 28, 0.2);
+  border-color: rgba(255, 77, 28, 0.65);
+}
+
+.magic-compare {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.magic-canvas-wrapper.is-comparing {
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(255, 77, 28, 0.7);
+}
+
+.magic-compare-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(10, 8, 8, 0.75);
+  color: #fffdf7;
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.magic-order-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.magic-order-grid .magic-btn {
+  padding: 0 8px;
+  justify-content: flex-start;
+}
+
+.magic-prop-title {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 10px !important;
+  min-width: 0;
+  flex-wrap: nowrap !important;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.magic-prop-title > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.magic-prop-title small {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 253, 247, 0.55);
+}
+
+.magic-prop-name {
+  font-size: 14px;
+  color: #fffdf7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+
+.magic-prop-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: contain;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background-color: #2a2523;
+  background-image: linear-gradient(45deg, #34302d 25%, transparent 25%), linear-gradient(-45deg, #34302d 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #34302d 75%), linear-gradient(-45deg, transparent 75%, #34302d 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0;
+}
+
+.magic-title-actions {
+  display: inline-flex !important;
+  gap: 6px !important;
+  flex-wrap: nowrap !important;
+}
+
+.magic-locked-hint,
+.magic-cutout-hint {
+  margin: -6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 253, 247, 0.6);
+}
+
+.magic-locked-hint {
+  color: #ffd59a;
+}
+
+.magic-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.magic-fieldset:disabled {
+  opacity: 0.5;
+}
+
+.magic-layers-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.magic-layer-count {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.magic-layer-item {
+  gap: 10px;
+  padding: 6px 8px 6px 4px;
+}
+
+.magic-layer-item.is-drop {
+  border-color: #ff4d1c;
+  box-shadow: inset 0 2px 0 #ff4d1c;
+}
+
+.magic-layer-item.is-dragging {
+  opacity: 0.4;
+}
+
+.magic-layer-item.is-background {
+  border-style: dashed;
+}
+
+.magic-drag-grip {
+  width: 12px;
+  font-size: 11px;
+  letter-spacing: -3px;
+  color: rgba(255, 253, 247, 0.35);
+  cursor: grab;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.magic-drag-grip.is-disabled {
+  visibility: hidden;
+}
+
+.magic-layer-thumb.is-cutout {
+  object-fit: contain;
+  padding: 3px;
+  background-color: #2a2523;
+  background-image: linear-gradient(45deg, #34302d 25%, transparent 25%), linear-gradient(-45deg, #34302d 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #34302d 75%), linear-gradient(-45deg, transparent 75%, #34302d 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0;
+}
+
+.magic-mini-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.magic-swatch-image {
+  background-size: cover;
+  background-position: center;
+  background-color: #2a2523;
+}
+
+@media (max-width: 640px) {
+  .magic-btn-label-sm {
+    display: none;
+  }
+
+  .magic-order-grid .magic-btn {
+    min-height: 40px;
+  }
+
+  .magic-layer-item {
+    padding: 8px 6px 8px 4px;
+  }
+
+  .magic-prop-name {
+    max-width: 120px;
+  }
+}
+
+@media (max-width: 900px) {
+  .magic-sidebar {
+    gap: 14px;
+  }
+}
+
+.magic-toast {
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  border-radius: 16px;
+}

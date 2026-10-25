@@ -338,7 +338,7 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
       const result = await api.separateLayers(jobId, variant, options);
       if (result.job) {
         dispatch({ type: "JOB_UPDATE", job: result.job });
-      } else if (result.layers || result.textLayers) {
+      } else if (result.elements || result.layers || result.textLayers) {
         const updatedResults = state.job.results.map((r, idx) => {
           if (idx + 1 === variant) {
             return {
@@ -348,7 +348,10 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
               textRemoved: result.textRemoved,
               layersVersion: result.layersVersion,
               baseUrl: result.baseUrl,
-              cleanUrl: result.cleanUrl,
+              cleanUrl: result.cleanUrl ?? null,
+              backgroundUrl: result.backgroundUrl,
+              elements: result.elements ?? [],
+              objectsRemoved: result.objectsRemoved,
             };
           }
           return r;

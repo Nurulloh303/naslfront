@@ -1,6 +1,7 @@
 import { useLanguage } from "../../../../i18n/LanguageContext";
-import { COLOR_SWATCHES, FONT_FAMILIES, FONT_WEIGHTS, PLATE_SWATCHES, isTextDirty, type TextLayerItem, type TextPatch } from "./editorTypes";
+import { COLOR_SWATCHES, FONT_FAMILIES, FONT_WEIGHTS, PLATE_SWATCHES, isTextDirty, usesCutout, type OrderAction, type TextLayerItem, type TextPatch } from "./editorTypes";
 import { fontStack } from "./renderLayers";
+import { OrderButtons } from "./LayerPanels";
 
 type Props = {
   layer: TextLayerItem;
@@ -9,6 +10,10 @@ type Props = {
   onDuplicate: () => void;
   onDelete: () => void;
   onReset: () => void;
+  isTop: boolean;
+  isBottom: boolean;
+  onOrder: (action: OrderAction) => void;
+  onToggleLock: () => void;
 };
 
 const MIN_FONT = 6;
@@ -19,7 +24,7 @@ function closestWeight(weight: number): number {
 }
 
 /** Tanlangan matnning sozlamalari (o'ng panel / telefonda pastki varaq). */
-export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onDelete, onReset }: Props) {
+export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onDelete, onReset, isTop, isBottom, onOrder, onToggleLock }: Props) {
   const { t } = useLanguage();
   const key = (field: string) => `${field}:${layer.id}`;
   const activeWeight = closestWeight(layer.fontWeight);
@@ -27,6 +32,8 @@ export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onD
     ? FONT_FAMILIES
     : [layer.fontFamily, ...FONT_FAMILIES];
   const dirty = isTextDirty(layer);
+  const cutout = usesCutout(layer);
+  const locked = layer.locked;
   const originalColor = layer.pristine?.color ?? null;
   const spacingRange = Math.max(4, Math.round(layer.fontSize * 0.5));
 
@@ -43,13 +50,21 @@ export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onD
       <div className="magic-section-title">
         <span>
           {t("magicLayers.textLayer")}
-          {layer.pristine ? <em className={`magic-state-pill ${dirty ? "is-dirty" : ""}`}>{dirty ? t("magicLayers.stateEdited") : t("magicLayers.stateOriginal")}</em> : null}
+          {layer.pristine ? <em className={`magic-state-pill ${dirty ? "is-dirty" : ""}`}>{dirty ? t("magicLayers.stateEdited") : t("magicLayers.stateOriginal")}</em> : <em className="magic-state-pill is-dirty">{t("magicLayers.stateNew")}</em>}
         </span>
-        <button type="button" className="magic-btn magic-btn-secondary magic-btn-sm" onClick={onEditInline}>
-          ✎ {t("magicLayers.editText")}
-        </button>
+        <span className="magic-title-actions">
+          <button type="button" className={`magic-btn magic-btn-secondary magic-btn-sm magic-btn-square ${locked ? "is-on" : ""}`} onClick={onToggleLock} aria-pressed={locked} title={locked ? t("magicLayers.unlock") : t("magicLayers.lock")} aria-label={locked ? t("magicLayers.unlock") : t("magicLayers.lock")}>
+            {locked ? "🔒" : "🔓"}
+          </button>
+          <button type="button" className="magic-btn magic-btn-secondary magic-btn-sm" onClick={onEditInline} disabled={locked}>
+            ✎ {t("magicLayers.editText")}
+          </button>
+        </span>
       </div>
 
+      {locked ? <p className="magic-locked-hint">{t("magicLayers.lockedHint")}</p> : cutout ? <p className="magic-cutout-hint">{t("magicLayers.cutoutHint")}</p> : null}
+
+      <fieldset className="magic-fieldset" disabled={locked}>
       <label className="magic-prop-row">
         <span className="magic-prop-header"><span>{t("magicLayers.text")}</span></span>
         <textarea
@@ -250,11 +265,15 @@ export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onD
         />
       </div>
 
+      </fieldset>
+
+      <OrderButtons isTop={isTop} isBottom={isBottom} onOrder={onOrder} />
+
       <div className="magic-action-grid">
         <button type="button" className="magic-btn magic-btn-secondary" onClick={onDuplicate}>⧉ {t("magicLayers.duplicate")}</button>
-        <button type="button" className="magic-btn magic-btn-secondary" onClick={onDelete}>🗑 {t("magicLayers.delete")}</button>
+        <button type="button" className="magic-btn magic-btn-secondary" onClick={onDelete} disabled={locked}>🗑 {t("magicLayers.delete")}</button>
         {layer.pristine ? (
-          <button type="button" className="magic-btn magic-btn-secondary magic-span-2" onClick={onReset} disabled={!dirty}>
+          <button type="button" className="magic-btn magic-btn-secondary magic-span-2" onClick={onReset} disabled={!dirty || locked}>
             ↺ {t("magicLayers.resetText")}
           </button>
         ) : null}

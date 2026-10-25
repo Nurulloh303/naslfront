@@ -148,20 +148,23 @@ function SlideFix({ variant, count, note, busy, disabled, onSubmit }: {
   </div>;
 }
 
-/** Joriy qatlamlar formati: asl rasm + toza fon + matnlar. Boshqa versiya ochilganda qayta ajratiladi. */
-const LAYERS_VERSION = 3;
+/** Joriy qatlamlar formati: fon + obyektlar + matn kesmalari. Boshqa versiya ochilganda qayta ajratiladi. */
+const LAYERS_VERSION = 4;
 
 /** Natija/javobdan muharrir manbasini yig'adi. `baseUrl` bo'lmasa — natijaning o'z rasmi. */
 function toMagicSource(result: GenerationResult, data?: Partial<SeparateLayersResponse>): MagicLayersSource {
   const pick = <T,>(a: T | undefined, b: T | undefined) => (a !== undefined ? a : b);
+  const baseUrl = pick(data?.baseUrl, result.baseUrl) || result.previewUrl || result.downloadUrl;
   return {
-    baseUrl: pick(data?.baseUrl, result.baseUrl) || result.previewUrl || result.downloadUrl,
-    cleanUrl: pick(data?.cleanUrl, result.cleanUrl) ?? null,
+    baseUrl,
+    // Fon bo'lmasa (ajratilmagan) — asl rasmning o'zi fon bo'ladi (ustiga matn qo'shish mumkin).
+    backgroundUrl: pick(data?.backgroundUrl, result.backgroundUrl) || baseUrl,
     width: data?.width || result.width,
     height: data?.height || result.height,
-    layers: pick(data?.layers, result.layers) ?? [],
+    elements: pick(data?.elements, result.elements) ?? [],
     textLayers: pick(data?.textLayers, result.textLayers) ?? [],
     textRemoved: pick(data?.textRemoved, result.textRemoved),
+    objectsRemoved: pick(data?.objectsRemoved, result.objectsRemoved),
   };
 }
 
@@ -250,12 +253,12 @@ export function ResultPanel({ job, contentType, hasReference, onGenerate, onDown
   const handleOpenLayers = async (variant: number) => {
     const targetResult = job.results[variant - 1];
     if (!targetResult) return;
-    // v3 formatidagi natija — darhol ochamiz (matnlar bo'lmasa ham: asl rasm + "Matn qo'shish").
-    if (targetResult.layersVersion === LAYERS_VERSION && (targetResult.baseUrl || targetResult.textLayers)) {
+    // v4 formatidagi natija — darhol ochamiz (obyekt/matn bo'lmasa ham: fon + "Matn qo'shish").
+    if (targetResult.layersVersion === LAYERS_VERSION && targetResult.backgroundUrl) {
       openMagic(variant, toMagicSource(targetResult));
       return;
     }
-    const fallback = toMagicSource(targetResult, { layers: [], textLayers: [], cleanUrl: null });
+    const fallback = toMagicSource(targetResult, { elements: [], textLayers: [], backgroundUrl: targetResult.baseUrl || targetResult.previewUrl || targetResult.downloadUrl, textRemoved: false, objectsRemoved: false });
     if (!onSeparateLayers) {
       openMagic(variant, fallback);
       return;
