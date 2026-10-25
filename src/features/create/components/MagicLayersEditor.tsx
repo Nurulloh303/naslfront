@@ -5,8 +5,10 @@ import { downloadBlob } from "../../../app/downloadHelper";
 import {
   buildEditorLayers,
   firstLine,
+  isTextDirty,
   newLocalId,
   normalizeOrders,
+  resetTextLayer,
   type EditorLayer,
   type ImageLayerItem,
   type TextLayerItem,
@@ -17,14 +19,19 @@ import {
   canvasToBlob,
   canvasToDataUrl,
   composeScene,
+  drawOutline,
   drawSelection,
   ensureFonts,
   fontStack,
   hitHandle,
   hitTestLayers,
+  isUntouched,
   layoutText,
   renderScene,
   rotateVector,
+  sampleFillColors,
+  selectionRect,
+  textRect,
   type HandleId,
   type Point,
 } from "./magicLayers/renderLayers";
@@ -33,26 +40,29 @@ import { TextLayerProps } from "./magicLayers/TextLayerProps";
 import { ConfirmDialog, DownloadReadySheet } from "./magicLayers/EditorDialogs";
 import "./MagicLayersEditor.css";
 
+/** Muharrir ochiladigan ma'lumot (API kontrakti v3). */
 export type MagicLayersSource = {
+  /** Asl rasm — o'zgarmaydi. */
+  baseUrl: string;
+  /** Matnsiz toza fon. null — yo'q (yamoq asl rasm rangi bilan to'ldiriladi). */
+  cleanUrl: string | null;
+  width: number;
+  height: number;
+  /** Ixtiyoriy rastr qatlamlar (odatda bo'sh). */
   layers: GenerationLayer[];
-  textLayers?: GenerationTextLayer[];
+  textLayers: GenerationTextLayer[];
   textRemoved?: boolean;
 };
 
 type Props = {
   jobId: string;
   variant: number;
-  initialLayers: GenerationLayer[];
-  /** Tahrirlanadigan matn qatlamlari. Eski natijalarda yo'q — []. */
-  initialTextLayers?: GenerationTextLayer[];
-  /** false — asl yozuv rastr qatlam ichida qolgan bo'lishi mumkin. */
-  textRemoved?: boolean;
-  resultWidth?: number;
-  resultHeight?: number;
+  source: MagicLayersSource;
   onClose: () => void;
   /** "← Orqaga": muharrirni yopib, bosh sahifaga qaytish. */
   onBack?: () => void;
   onSave: (imageDataUrl: string) => Promise<boolean | void>;
+  /** "Matnlarni qayta aniqlash" (force). */
   onReseparate?: () => Promise<MagicLayersSource>;
 };
 
@@ -63,6 +73,7 @@ type Interaction = {
   layerId: string;
   startPt: Point;
   start: EditorLayer;
+  startHeight: number;
   /** Sudrashdan oldingi holat — tugaganda bitta undo qadami bo'ladi. */
   snapshot: EditorLayer[];
   moved: boolean;
@@ -70,10 +81,22 @@ type Interaction = {
 
 type ImageLoadState = "loading" | "ok" | "error";
 
-const MIN_TEXT_WIDTH = 24;
+const BASE_KEY = "__base";
+const CLEAN_KEY = "__clean";
+const MIN_TEXT_WIDTH = 16;
 const MIN_FONT = 6;
 const MAX_FONT = 600;
 const DOUBLE_TAP_MS = 350;
+const OUTLINE_INTRO_MS = 2000;
+
+/** Och rang (oq matn) — ro'yxatdagi belgida to'q fon kerak. */
+function isLightColor(hex: string): boolean {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.75;
+}
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -87,22 +110,11 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return false;
 }
 
-export function MagicLayersEditor({
-  jobId: _jobId,
-  variant,
-  initialLayers,
-  initialTextLayers,
-  textRemoved: initialTextRemoved,
-  resultWidth = 1080,
-  resultHeight = 1440,
-  onClose,
-  onBack,
-  onSave,
-  onReseparate,
-}: Props) {
+export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onBack, onSave, onReseparate }: Props) {
   const { t } = useLanguage();
-  const W = resultWidth;
-  const H = resultHeight;
+  const [scene, setScene] = useState<MagicLayersSource>(source);
+  const W = Math.max(1, Math.round(scene.width || 1080));
+  const H = Math.max(1, Math.round(scene.height || 1440));
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -117,11 +129,14 @@ export function MagicLayersEditor({
   const { update, commitFrom, reset: resetHistory } = history;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const [outlinesOn, setOutlinesOn] = useState(true);
+  const outlinesTouched = useRef(false);
   const [images, setImages] = useState<Record<string, HTMLImageElement | undefined>>({});
   const [loadStates, setLoadStates] = useState<Record<string, ImageLoadState>>({});
+  const [fills, setFills] = useState<Record<string, string>>({});
   const [fontsTick, setFontsTick] = useState(0);
   const [cssWidth, setCssWidth] = useState(0);
-  const [textRemoved, setTextRemoved] = useState<boolean | undefined>(initialTextRemoved);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -144,52 +159,81 @@ export function MagicLayersEditor({
   /* Yuklash                                                           */
   /* ---------------------------------------------------------------- */
 
-  const loadImages = useCallback((items: EditorLayer[]) => {
+  const loadImages = useCallback((entries: Array<{ key: string; url: string }>) => {
     const token = ++loadToken.current;
     alphaCache.current.clear();
-    const imageItems = items.filter((l): l is ImageLayerItem => l.kind === "image");
     setImages({});
-    setLoadStates(Object.fromEntries(imageItems.map((l) => [l.id, "loading" as ImageLoadState])));
-    const done = (id: string, image: HTMLImageElement | undefined, state: ImageLoadState) => {
+    setFills({});
+    setLoadStates(Object.fromEntries(entries.map((e) => [e.key, "loading" as ImageLoadState])));
+    const done = (key: string, image: HTMLImageElement | undefined, state: ImageLoadState) => {
       if (token !== loadToken.current) return;
-      setImages((current) => ({ ...current, [id]: image }));
-      setLoadStates((current) => ({ ...current, [id]: state }));
+      setImages((current) => ({ ...current, [key]: image }));
+      setLoadStates((current) => ({ ...current, [key]: state }));
     };
-    for (const item of imageItems) {
+    for (const entry of entries) {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.decoding = "async";
-      img.onload = () => done(item.id, img, "ok");
+      img.onload = () => done(entry.key, img, "ok");
       img.onerror = () => {
+        if (entry.key === CLEAN_KEY) {
+          // Toza fon CORS'siz yuklansa, eksport baribir buziladi — rang bilan to'ldiramiz.
+          done(entry.key, undefined, "error");
+          return;
+        }
         // CORS rad etsa — crossOrigin'siz. Ko'rinadi, lekin eksportda kanvas ifloslanadi.
         const fallback = new Image();
-        fallback.onload = () => done(item.id, fallback, "ok");
-        fallback.onerror = () => done(item.id, undefined, "error");
-        fallback.src = item.url;
+        fallback.onload = () => done(entry.key, fallback, "ok");
+        fallback.onerror = () => done(entry.key, undefined, "error");
+        fallback.src = entry.url;
       };
-      img.src = item.url;
+      img.src = entry.url;
     }
   }, []);
 
-  const loadSource = useCallback((raster: GenerationLayer[], text: GenerationTextLayer[] | undefined) => {
-    const items = buildEditorLayers(raster, text, { width: W, height: H, layerLabel: t("magicLayers.defaultLayer"), textLabel: t("magicLayers.textLayer") });
+  const loadSource = useCallback((next: MagicLayersSource) => {
+    const width = Math.max(1, Math.round(next.width || 1080));
+    const height = Math.max(1, Math.round(next.height || 1440));
+    const items = buildEditorLayers(next.layers ?? [], next.textLayers ?? [], { width, height, layerLabel: t("magicLayers.defaultLayer"), textLabel: t("magicLayers.textLayer") });
     sourceLayers.current = items;
     resetHistory(items);
-    const product = items.find((l) => l.kind === "image" && l.order === 2);
-    setSelectedId(product?.id ?? null);
+    setScene(next);
+    setSelectedId(null);
+    setHoverId(null);
     setEditingId(null);
     editingRef.current = null;
     pendingNewRef.current = null;
-    loadImages(items);
-  }, [H, W, loadImages, resetHistory, t]);
+    const entries = [{ key: BASE_KEY, url: next.baseUrl }];
+    if (next.cleanUrl) entries.push({ key: CLEAN_KEY, url: next.cleanUrl });
+    for (const layer of items) if (layer.kind === "image") entries.push({ key: layer.id, url: layer.url });
+    loadImages(entries);
+  }, [loadImages, resetHistory, t]);
 
   // Faqat ochilganda: ota komponent qayta chizilganda foydalanuvchi o'zgarishlari yo'qolmasin.
   const initialized = useRef(false);
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-    loadSource(initialLayers, initialTextLayers);
-  }, [initialLayers, initialTextLayers, loadSource]);
+    loadSource(source);
+  }, [loadSource, source]);
+
+  // Ochilganda 2 soniya barcha tahrirlanadigan matnlar ko'rsatiladi, keyin — faqat kursor ostida.
+  useEffect(() => {
+    const timer = window.setTimeout(() => { if (!outlinesTouched.current) setOutlinesOn(false); }, OUTLINE_INTRO_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const baseImage = images[BASE_KEY];
+  const cleanImage = images[CLEAN_KEY];
+  const cleanAvailable = Boolean(scene.cleanUrl) && loadStates[CLEAN_KEY] === "ok" && Boolean(cleanImage);
+  const cleanSettled = !scene.cleanUrl || (loadStates[CLEAN_KEY] !== undefined && loadStates[CLEAN_KEY] !== "loading");
+
+  // Toza fon yo'q: yamoq rangini asl rasmdan bir marta olamiz.
+  useEffect(() => {
+    if (!baseImage || cleanAvailable || !cleanSettled) return;
+    const texts = sourceLayers.current.filter((l): l is TextLayerItem => l.kind === "text");
+    setFills(sampleFillColors(baseImage, W, H, texts));
+  }, [baseImage, cleanAvailable, cleanSettled, H, W]);
 
   // Shriftlar: kerakli oilalar/qalinliklar yuklangach qayta chizamiz.
   const fontKey = useMemo(
@@ -235,16 +279,20 @@ export function MagicLayersEditor({
   const activeLayer = layers.find((l) => l.id === selectedId && !l.deleted) ?? null;
   const editingLayer = editingId ? (layers.find((l) => l.id === editingId && l.kind === "text") as TextLayerItem | undefined) ?? null : null;
   const unit = cssWidth > 0 ? W / cssWidth : 1;
+  const sceneImages = { base: baseImage, clean: cleanAvailable ? cleanImage : undefined };
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
-    renderScene(ctx, { width: W, height: H, layers, images, skipTextId: editingId });
-    if (activeLayer && activeLayer.visible && !editingId) {
-      drawSelection(ctx, activeLayer, W, H, unit, coarsePointer ? 10 : 7);
+    renderScene(ctx, { width: W, height: H, ...sceneImages, layers, images, fills, editingId });
+    if (editingId) return;
+    for (const layer of layers) {
+      if (layer.kind !== "text" || layer.deleted || !layer.visible || layer.id === activeLayer?.id) continue;
+      if (outlinesOn || layer.id === hoverId) drawOutline(ctx, textRect(layer), layer.rotation, unit);
     }
-  }, [activeLayer, coarsePointer, editingId, fontsTick, H, images, layers, unit, W]);
+    if (activeLayer && activeLayer.visible) drawSelection(ctx, activeLayer, W, H, unit, coarsePointer ? 10 : 7);
+  }, [activeLayer, baseImage, cleanAvailable, cleanImage, coarsePointer, editingId, fills, fontsTick, H, hoverId, images, layers, outlinesOn, unit, W]);
 
   /* ---------------------------------------------------------------- */
   /* Qatlam amallari                                                   */
@@ -272,9 +320,13 @@ export function MagicLayersEditor({
     if (selectedId === id) setSelectedId(null);
   };
 
-  const moveOrder = (id: string, direction: "up" | "down") => {
+  const resetText = (id: string) => {
+    update((prev) => prev.map((l) => (l.id === id && l.kind === "text" ? resetTextLayer(l) : l)));
+  };
+
+  const moveImageOrder = (id: string, direction: "up" | "down") => {
     update((prev) => {
-      const sorted = [...prev].sort((a, b) => a.order - b.order);
+      const sorted = prev.filter((l) => l.kind === "image").sort((a, b) => a.order - b.order);
       const index = sorted.findIndex((l) => l.id === id);
       const target = direction === "up" ? index + 1 : index - 1;
       if (index === -1 || target < 0 || target >= sorted.length) return prev;
@@ -284,22 +336,10 @@ export function MagicLayersEditor({
     });
   };
 
-  const textHeight = (layer: TextLayerItem) => layoutText(layer).box.height;
-
-  const centerSelected = () => {
-    if (!activeLayer) return;
-    if (activeLayer.kind === "image") patchLayer(activeLayer.id, { x: 0, y: 0 });
-    else patchLayer(activeLayer.id, { x: Math.round((W - activeLayer.width) / 2), y: Math.round((H - textHeight(activeLayer)) / 2) });
-  };
-
-  const resetSelected = () => {
-    if (!activeLayer) return;
-    const original = sourceLayers.current.find((l) => l.id === activeLayer.id);
-    if (original) {
-      update((prev) => prev.map((l) => (l.id === original.id ? { ...original, order: l.order } : l)));
-    } else if (activeLayer.kind === "image") {
-      patchLayer(activeLayer.id, { x: 0, y: 0, scale: 1, opacity: 1, visible: true, deleted: false });
-    }
+  const resetImage = (layer: ImageLayerItem) => {
+    const original = sourceLayers.current.find((l) => l.id === layer.id);
+    if (original) update((prev) => prev.map((l) => (l.id === original.id ? { ...original, order: l.order } : l)));
+    else patchLayer(layer.id, { x: 0, y: 0, scale: 1, opacity: 1, visible: true, deleted: false });
   };
 
   const resetAll = () => {
@@ -308,9 +348,10 @@ export function MagicLayersEditor({
   };
 
   const duplicateText = (id: string) => {
-    const source = layers.find((l) => l.id === id);
-    if (!source || source.kind !== "text") return;
-    const copy: TextLayerItem = { ...source, id: newLocalId("text"), x: source.x + 24, y: source.y + 24, order: source.order + 0.5, deleted: false, visible: true };
+    const src = layers.find((l) => l.id === id);
+    if (!src || src.kind !== "text") return;
+    const offset = Math.round(Math.max(16, src.fontSize * 0.4));
+    const copy: TextLayerItem = { ...src, id: newLocalId("text"), x: src.x + offset, y: src.y + offset, order: src.order + 0.5, deleted: false, visible: true, pristine: null, source: null };
     update((prev) => normalizeOrders([...prev, copy]));
     setSelectedId(copy.id);
   };
@@ -341,7 +382,7 @@ export function MagicLayersEditor({
         history.undo();
         setSelectedId(null);
       } else if (mode === "commit") {
-        // Matn butunlay o'chirildi — qatlamni o'chirilgan deb belgilaymiz (tiklash mumkin).
+        // Matn butunlay o'chirildi — o'chirilgan deb belgilaymiz (asl joy toza fon bilan yopiladi).
         update((prev) => prev.map((l) => (l.id === id ? { ...l, deleted: true } : l)));
         setSelectedId(null);
       }
@@ -372,9 +413,13 @@ export function MagicLayersEditor({
       align: "center",
       fontFamily: "Inter",
       lineHeight: 1.15,
+      letterSpacing: 0,
       uppercase: false,
       background: null,
       rotation: 0,
+      autoFit: true,
+      source: null,
+      pristine: null,
       opacity: 1,
       visible: true,
       deleted: false,
@@ -404,8 +449,12 @@ export function MagicLayersEditor({
     return { x: ((clientX - rect.left) * W) / rect.width, y: ((clientY - rect.top) * H) / rect.height };
   };
 
+  const hitAt = (pt: Point, touch: boolean) =>
+    hitTestLayers(layers, pt, { width: W, height: H, images, alpha: alphaCache.current, textSlop: (touch ? 10 : 4) * unit });
+
   const beginInteraction = (e: React.PointerEvent<HTMLCanvasElement>, layer: EditorLayer, mode: Interaction["mode"], handle: HandleId | null, pt: Point) => {
-    interaction.current = { pointerId: e.pointerId, mode, handle, layerId: layer.id, startPt: pt, start: layer, snapshot: layers, moved: false };
+    const startHeight = selectionRect(layer, W, H).height;
+    interaction.current = { pointerId: e.pointerId, mode, handle, layerId: layer.id, startPt: pt, start: layer, startHeight, snapshot: layers, moved: false };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
   };
 
@@ -428,7 +477,7 @@ export function MagicLayersEditor({
       }
     }
 
-    const hit = hitTestLayers(layers, pt, { width: W, height: H, images, alpha: alphaCache.current, textSlop: (touch ? 10 : 3) * unit });
+    const hit = hitAt(pt, touch);
     if (!hit) {
       setSelectedId(null);
       lastTap.current = null;
@@ -449,7 +498,14 @@ export function MagicLayersEditor({
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const it = interaction.current;
-    if (!it || it.pointerId !== e.pointerId) return;
+    if (!it || it.pointerId !== e.pointerId) {
+      if (e.pointerType === "mouse" && !editingRef.current) {
+        const hit = hitAt(getCanvasCoords(e.clientX, e.clientY), false);
+        const id = hit?.kind === "text" ? hit.id : null;
+        if (id !== hoverId) setHoverId(id);
+      }
+      return;
+    }
     const pt = getCanvasCoords(e.clientX, e.clientY);
     const dx = pt.x - it.startPt.x;
     const dy = pt.y - it.startPt.y;
@@ -485,13 +541,13 @@ export function MagicLayersEditor({
         const maxFactor = Math.min((W * 3) / start.width, MAX_FONT / start.fontSize);
         const factor = Math.max(minFactor, Math.min(maxFactor, raw / start.width));
         const width = start.width * factor;
-        const startHeight = textHeight(start);
         patch = {
           width: Math.round(width),
           fontSize: Math.round(start.fontSize * factor * 10) / 10,
+          letterSpacing: Math.round((start.letterSpacing || 0) * factor * 10) / 10,
           height: Math.round(start.height * factor),
           x: Math.round(east ? start.x : start.x + start.width - width),
-          y: Math.round(north ? start.y + startHeight * (1 - factor) : start.y),
+          y: Math.round(north ? start.y + it.startHeight * (1 - factor) : start.y),
         };
       }
     }
@@ -511,7 +567,9 @@ export function MagicLayersEditor({
   /* ---------------------------------------------------------------- */
 
   const busy = saving || downloading || reseparating;
-  const imagesReady = Object.values(loadStates).every((s) => s !== "loading");
+  const imagesReady = Object.values(loadStates).every((s) => s !== "loading") && loadStates[BASE_KEY] === "ok";
+  const baseLoading = loadStates[BASE_KEY] === "loading";
+  const baseFailed = loadStates[BASE_KEY] === "error";
   const dirty = history.dirty;
 
   const requestExit = (action: () => void) => {
@@ -539,10 +597,11 @@ export function MagicLayersEditor({
   const exportError = (reason: unknown) =>
     reason instanceof Error && reason.message === "TAINTED" ? t("magicLayers.exportTainted") : t("magicLayers.exportFailed");
 
-  const compose = () => composeScene({ width: W, height: H, layers, images });
+  const compose = () => composeScene({ width: W, height: H, ...sceneImages, layers, images, fills });
 
   const handleSave = async () => {
     if (busy) return;
+    if (editingRef.current) finishEditing("commit");
     setSaving(true);
     setError(null);
     try {
@@ -563,6 +622,7 @@ export function MagicLayersEditor({
 
   const handleDownload = async () => {
     if (busy) return;
+    if (editingRef.current) finishEditing("commit");
     setDownloading(true);
     setError(null);
     try {
@@ -583,9 +643,7 @@ export function MagicLayersEditor({
     try {
       setReseparating(true);
       setError(null);
-      const source = await onReseparate();
-      loadSource(source.layers, source.textLayers ?? []);
-      setTextRemoved(source.textRemoved);
+      loadSource(await onReseparate());
     } catch {
       // Xabar ota komponentda (createFlow notice) ko'rsatiladi.
     } finally {
@@ -604,6 +662,11 @@ export function MagicLayersEditor({
       confirmLabel: t("magicLayers.reseparate"),
       action: () => void runReseparate(),
     });
+  };
+
+  const toggleOutlines = () => {
+    outlinesTouched.current = true;
+    setOutlinesOn((v) => !v);
   };
 
   /* ---------------------------------------------------------------- */
@@ -671,40 +734,54 @@ export function MagicLayersEditor({
     if (!editingLayer || cssWidth <= 0) return null;
     const r = cssWidth / W; // 1 kanvas px necha CSS px
     const layout = layoutText(editingLayer, editDraft || " ");
-    const cssFont = editingLayer.fontSize * r;
+    const cssFont = layout.fontSize * r;
     // iOS 16px dan kichik shriftli maydonga fokusda sahifani kattalashtiradi —
     // shuning uchun kamida 16px bilan yozib, transform bilan kichraytiramiz.
     const k = cssFont < 16 ? cssFont / 16 : 1;
-    const outerW = layout.outer.width * r;
-    const outerH = Math.max(layout.outer.height, layout.lineHeightPx) * r;
-    const centerX = (layout.outer.x + layout.outer.width / 2) * r;
-    const centerY = (layout.outer.y + Math.max(layout.outer.height, layout.lineHeightPx) / 2) * r;
+    const lineCount = Math.max(1, layout.lines.length);
+    const w = layout.areaWidth * r;
+    const h = lineCount * layout.lineHeightPx * r;
+    const centerX = layout.areaLeft * r + w / 2;
+    const centerY = layout.lineBoxTop * r + h / 2;
     return {
-      left: centerX - outerW / k / 2,
-      top: centerY - outerH / k / 2,
-      width: outerW / k,
-      height: outerH / k,
-      padding: `${(layout.padY * r) / k}px ${(layout.padX * r) / k}px`,
+      left: centerX - w / k / 2,
+      top: centerY - h / k / 2,
+      width: w / k,
+      height: h / k,
+      padding: 0,
       fontFamily: fontStack(editingLayer.fontFamily),
       fontWeight: editingLayer.fontWeight,
       fontSize: cssFont / k,
-      lineHeight: editingLayer.lineHeight,
+      // Global mobil qoida (textarea 16px !important) ustidan — CSS o'zgaruvchisi orqali.
+      ["--ml-font-size" as string]: `${cssFont / k}px`,
+      lineHeight: `${(layout.lineHeightPx * r) / k}px`,
+      letterSpacing: `${(layout.letterSpacing * r) / k}px`,
       color: editingLayer.color,
       textAlign: editingLayer.align,
       textTransform: editingLayer.uppercase ? "uppercase" : "none",
-      background: editingLayer.background ?? "transparent",
-      borderRadius: (editingLayer.fontSize * 0.3 * r) / k,
+      whiteSpace: "pre",
+      background: "transparent",
       opacity: editingLayer.opacity,
       transform: `rotate(${editingLayer.rotation}deg) scale(${k})`,
     };
-  }, [cssWidth, editDraft, editingLayer, W]);
+  }, [cssWidth, editDraft, editingLayer, fontsTick, W]);
 
   /* ---------------------------------------------------------------- */
   /* Ko'rinish                                                         */
   /* ---------------------------------------------------------------- */
 
-  const displayLayers = [...layers].sort((a, b) => b.order - a.order);
-  const textCount = layers.filter((l) => l.kind === "text" && !l.deleted).length;
+  const textItems = layers.filter((l): l is TextLayerItem => l.kind === "text").sort((a, b) => a.y - b.y || a.x - b.x);
+  const imageItems = layers.filter((l): l is ImageLayerItem => l.kind === "image").sort((a, b) => b.order - a.order);
+  const textCount = textItems.filter((l) => !l.deleted).length;
+  const detectedCount = textItems.filter((l) => l.pristine).length;
+  const showFallbackNotice = detectedCount > 0 && cleanSettled && !cleanAvailable;
+  const editedCount = textItems.filter((l) => isTextDirty(l)).length;
+
+  const textStatus = (layer: TextLayerItem) => {
+    if (layer.deleted) return t("magicLayers.deleted");
+    if (!layer.pristine) return t("magicLayers.stateNew");
+    return isUntouched(layer) ? t("magicLayers.stateOriginal") : t("magicLayers.stateEdited");
+  };
 
   return (
     <div className="magic-layers-backdrop" role="dialog" aria-modal="true" aria-labelledby="magic-editor-title">
@@ -724,13 +801,7 @@ export function MagicLayersEditor({
         </div>
 
         <div className="magic-header-actions">
-          {onReseparate && (
-            <button type="button" className="magic-btn magic-btn-secondary" onClick={handleReseparate} disabled={busy} title={t("magicLayers.reseparate")}>
-              <span aria-hidden="true">🔄</span>
-              <span className="magic-btn-label">{reseparating ? t("magicLayers.reseparating") : t("magicLayers.reseparate")}</span>
-            </button>
-          )}
-          <button type="button" className="magic-btn magic-btn-secondary magic-hide-sm" onClick={resetAll} disabled={busy} title={t("magicLayers.resetAll")}>
+          <button type="button" className="magic-btn magic-btn-secondary magic-hide-sm" onClick={resetAll} disabled={busy || !dirty} title={t("magicLayers.resetAll")}>
             <span aria-hidden="true">↺</span>
             <span className="magic-btn-label">{t("magicLayers.resetAll")}</span>
           </button>
@@ -757,6 +828,17 @@ export function MagicLayersEditor({
                 ✎ <span className="magic-btn-label">{t("magicLayers.editText")}</span>
               </button>
             ) : null}
+            {detectedCount > 0 ? (
+              <button
+                type="button"
+                className={`magic-btn magic-btn-secondary magic-btn-sm magic-toggle ${outlinesOn ? "is-on" : ""}`}
+                onClick={toggleOutlines}
+                aria-pressed={outlinesOn}
+                title={t("magicLayers.showTexts")}
+              >
+                <span aria-hidden="true">▢</span> <span className="magic-btn-label">{t("magicLayers.showTexts")}</span>
+              </button>
+            ) : null}
             <span className="magic-toolbar-sep" />
             <button type="button" className="magic-btn magic-btn-secondary magic-btn-sm magic-btn-square" onClick={history.undo} disabled={!history.canUndo || busy} title={`${t("magicLayers.undo")} (Ctrl+Z)`} aria-label={t("magicLayers.undo")}>↶</button>
             <button type="button" className="magic-btn magic-btn-secondary magic-btn-sm magic-btn-square" onClick={history.redo} disabled={!history.canRedo || busy} title={`${t("magicLayers.redo")} (Ctrl+Shift+Z)`} aria-label={t("magicLayers.redo")}>↷</button>
@@ -769,18 +851,22 @@ export function MagicLayersEditor({
               <button type="button" className="magic-mini-btn" onClick={() => setError(null)} aria-label={t("magicLayers.close")}>✕</button>
             </div>
           ) : null}
+          {baseFailed ? (
+            <div className="magic-error-banner" role="alert"><span>{t("magicLayers.baseFailed")}</span></div>
+          ) : null}
 
           <div className="magic-canvas-stage">
             <div className="magic-canvas-wrapper">
               <canvas
                 ref={canvasRef}
-                className="magic-canvas-element"
+                className={`magic-canvas-element ${hoverId ? "is-over-text" : ""}`}
                 width={W}
                 height={H}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
+                onPointerLeave={() => setHoverId(null)}
                 onContextMenu={(e) => e.preventDefault()}
               />
               {editingLayer && textareaStyle ? (
@@ -790,6 +876,7 @@ export function MagicLayersEditor({
                   style={textareaStyle}
                   value={editDraft}
                   spellCheck={false}
+                  wrap="off"
                   aria-label={t("magicLayers.text")}
                   onChange={(e) => { draftRef.current = e.target.value; setEditDraft(e.target.value); }}
                   onBlur={() => finishEditing("commit")}
@@ -803,17 +890,17 @@ export function MagicLayersEditor({
             </div>
           </div>
 
-          {reseparating && (
+          {reseparating || baseLoading ? (
             <div className="magic-loading-overlay">
               <div className="magic-spinner" />
-              <div className="magic-loading-title">{t("magicLayers.loadingTitle")}</div>
-              <div className="magic-loading-sub">{t("magicLayers.loadingText")}</div>
+              <div className="magic-loading-title">{reseparating ? t("magicLayers.loadingTitle") : t("magicLayers.imageLoadingTitle")}</div>
+              {reseparating ? <div className="magic-loading-sub">{t("magicLayers.loadingText")}</div> : null}
             </div>
-          )}
+          ) : null}
         </section>
 
         <aside className="magic-sidebar">
-          {textRemoved === false ? (
+          {showFallbackNotice ? (
             <div className="magic-notice" role="note">
               <b>ℹ {t("magicLayers.textNotRemovedTitle")}</b>
               <span>{t("magicLayers.textNotRemovedText")}</span>
@@ -827,8 +914,7 @@ export function MagicLayersEditor({
               onEditInline={() => startEditing(activeLayer)}
               onDuplicate={() => duplicateText(activeLayer.id)}
               onDelete={() => toggleDelete(activeLayer.id)}
-              onMoveUp={() => moveOrder(activeLayer.id, "up")}
-              onMoveDown={() => moveOrder(activeLayer.id, "down")}
+              onReset={() => resetText(activeLayer.id)}
             />
           ) : activeLayer?.kind === "image" ? (
             <div className="magic-layer-props">
@@ -870,24 +956,81 @@ export function MagicLayersEditor({
               </div>
 
               <div className="magic-action-grid">
-                <button type="button" className="magic-btn magic-btn-secondary" onClick={centerSelected}>🎯 {t("magicLayers.centerLayer")}</button>
-                <button type="button" className="magic-btn magic-btn-secondary" onClick={resetSelected}>↺ {t("magicLayers.resetSelected")}</button>
-                <button type="button" className="magic-btn magic-btn-secondary" onClick={() => moveOrder(activeLayer.id, "up")}>▲ {t("magicLayers.moveUp")}</button>
-                <button type="button" className="magic-btn magic-btn-secondary" onClick={() => moveOrder(activeLayer.id, "down")}>▼ {t("magicLayers.moveDown")}</button>
+                <button type="button" className="magic-btn magic-btn-secondary" onClick={() => patchLayer(activeLayer.id, { x: 0, y: 0 })}>🎯 {t("magicLayers.centerLayer")}</button>
+                <button type="button" className="magic-btn magic-btn-secondary" onClick={() => resetImage(activeLayer)}>↺ {t("magicLayers.resetSelected")}</button>
+                <button type="button" className="magic-btn magic-btn-secondary" onClick={() => moveImageOrder(activeLayer.id, "up")}>▲ {t("magicLayers.moveUp")}</button>
+                <button type="button" className="magic-btn magic-btn-secondary" onClick={() => moveImageOrder(activeLayer.id, "down")}>▼ {t("magicLayers.moveDown")}</button>
               </div>
             </div>
           ) : (
-            <p className="magic-empty-hint">{textCount > 0 ? t("magicLayers.selectHintText") : t("magicLayers.selectHint")}</p>
+            <p className="magic-empty-hint">
+              {textCount > 0 ? t("magicLayers.selectHintText") : t("magicLayers.selectHint")}
+            </p>
           )}
 
           <div>
             <div className="magic-section-title">
               <span>{t("magicLayers.layersTitle")}</span>
-              <span>({displayLayers.filter((l) => !l.deleted).length})</span>
+              <span>{editedCount > 0 ? t("magicLayers.editedCount", { count: editedCount }) : `(${textCount})`}</span>
             </div>
 
             <div className="magic-layer-list">
-              {displayLayers.map((layer) => {
+              {textItems.map((layer) => {
+                const isSelected = layer.id === selectedId;
+                return (
+                  <div
+                    key={layer.id}
+                    className={`magic-layer-item ${isSelected ? "is-active" : ""} ${layer.deleted ? "is-hidden" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
+                    onClick={() => { if (!layer.deleted) setSelectedId(layer.id); }}
+                    onDoubleClick={() => { if (!layer.deleted) startEditing(layer); }}
+                    onMouseEnter={() => setHoverId(layer.id)}
+                    onMouseLeave={() => setHoverId(null)}
+                    onKeyDown={(e) => {
+                      if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget && !layer.deleted) {
+                        e.preventDefault();
+                        setSelectedId(layer.id);
+                      }
+                    }}
+                  >
+                    <span
+                      className="magic-layer-thumb is-text"
+                      aria-hidden="true"
+                      style={{ fontFamily: fontStack(layer.fontFamily), color: layer.color, background: layer.background ?? (isLightColor(layer.color) ? "#2A2523" : undefined) }}
+                    >T</span>
+                    <div className="magic-layer-info">
+                      <div className="magic-layer-name">{firstLine(layer.text) || t("magicLayers.textLayer")}</div>
+                      <div className="magic-layer-meta">
+                        {textStatus(layer)} · {layer.fontFamily} · {Math.round(layer.fontSize)}px
+                      </div>
+                    </div>
+                    <div className="magic-layer-btns">
+                      {layer.pristine && isTextDirty(layer) && !layer.deleted ? (
+                        <button
+                          type="button"
+                          className="magic-mini-btn"
+                          title={t("magicLayers.resetText")}
+                          aria-label={t("magicLayers.resetText")}
+                          onClick={(e) => { e.stopPropagation(); resetText(layer.id); }}
+                        >↺</button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="magic-mini-btn"
+                        title={layer.deleted ? t("magicLayers.restore") : t("magicLayers.delete")}
+                        aria-label={layer.deleted ? t("magicLayers.restore") : t("magicLayers.delete")}
+                        onClick={(e) => { e.stopPropagation(); toggleDelete(layer.id); }}
+                      >
+                        {layer.deleted ? "↩" : "🗑"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {imageItems.map((layer) => {
                 const isSelected = layer.id === selectedId;
                 return (
                   <div
@@ -897,42 +1040,16 @@ export function MagicLayersEditor({
                     tabIndex={0}
                     aria-pressed={isSelected}
                     onClick={() => { if (!layer.deleted) setSelectedId(layer.id); }}
-                    onDoubleClick={() => { if (!layer.deleted && layer.kind === "text") startEditing(layer); }}
-                    onKeyDown={(e) => {
-                      if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget && !layer.deleted) {
-                        e.preventDefault();
-                        setSelectedId(layer.id);
-                      }
-                    }}
                   >
-                    {layer.kind === "text" ? (
-                      <span
-                        className="magic-layer-thumb is-text"
-                        aria-hidden="true"
-                        style={{ fontFamily: fontStack(layer.fontFamily), color: layer.color, background: layer.background ?? undefined }}
-                      >T</span>
-                    ) : (
-                      <img
-                        src={layer.url}
-                        alt={layer.name}
-                        className="magic-layer-thumb"
-                        onError={(e) => { (e.target as HTMLElement).style.visibility = "hidden"; }}
-                      />
-                    )}
+                    <img src={layer.url} alt={layer.name} className="magic-layer-thumb" onError={(e) => { (e.target as HTMLElement).style.visibility = "hidden"; }} />
                     <div className="magic-layer-info">
-                      <div className="magic-layer-name">
-                        {layer.kind === "text" ? firstLine(layer.text) || t("magicLayers.textLayer") : layer.name}
-                        {layer.deleted && ` (${t("magicLayers.deleted")})`}
-                      </div>
+                      <div className="magic-layer-name">{layer.name}{layer.deleted && ` (${t("magicLayers.deleted")})`}</div>
                       <div className="magic-layer-meta">
-                        {layer.kind === "text"
-                          ? `${t("magicLayers.textLayer")} · ${layer.fontFamily} · ${Math.round(layer.fontSize)}px`
-                          : `${t("magicLayers.layerOrder")}: #${layer.order} · ${Math.round(layer.scale * 100)}%`}
-                        {layer.kind === "image" && loadStates[layer.id] === "loading" ? ` · ${t("magicLayers.imageLoading")}` : ""}
-                        {layer.kind === "image" && loadStates[layer.id] === "error" ? ` · ${t("magicLayers.imageFailed")}` : ""}
+                        {`${t("magicLayers.layerOrder")}: #${layer.order} · ${Math.round(layer.scale * 100)}%`}
+                        {loadStates[layer.id] === "loading" ? ` · ${t("magicLayers.imageLoading")}` : ""}
+                        {loadStates[layer.id] === "error" ? ` · ${t("magicLayers.imageFailed")}` : ""}
                       </div>
                     </div>
-
                     <div className="magic-layer-btns">
                       <button
                         type="button"
@@ -956,7 +1073,22 @@ export function MagicLayersEditor({
                   </div>
                 );
               })}
+
+              <div className="magic-layer-item is-locked" aria-disabled="true">
+                <img src={scene.baseUrl} alt="" className="magic-layer-thumb" onError={(e) => { (e.target as HTMLElement).style.visibility = "hidden"; }} />
+                <div className="magic-layer-info">
+                  <div className="magic-layer-name">{t("magicLayers.baseLayer")}</div>
+                  <div className="magic-layer-meta">{t("magicLayers.baseLayerMeta")}</div>
+                </div>
+                <span className="magic-lock" aria-label={t("magicLayers.locked")} title={t("magicLayers.locked")}>🔒</span>
+              </div>
             </div>
+
+            {onReseparate ? (
+              <button type="button" className="magic-btn magic-btn-ghost magic-btn-sm magic-redetect" onClick={handleReseparate} disabled={busy}>
+                🔍 {reseparating ? t("magicLayers.reseparating") : t("magicLayers.reseparate")}
+              </button>
+            ) : null}
           </div>
         </aside>
       </div>

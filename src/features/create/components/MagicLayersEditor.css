@@ -991,3 +991,171 @@ a.magic-btn {
     padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* ============================================================
+   v3: asl rasm ustida matnni joyida tahrirlash
+   ============================================================ */
+.magic-canvas-element.is-over-text {
+  cursor: pointer;
+}
+
+.magic-toggle.is-on {
+  background: rgba(255, 77, 28, 0.18);
+  border-color: rgba(255, 77, 28, 0.6);
+}
+
+.magic-state-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 253, 247, 0.75);
+  vertical-align: middle;
+}
+
+.magic-state-pill.is-dirty {
+  background: rgba(255, 77, 28, 0.2);
+  color: #ffb39c;
+}
+
+.magic-prop-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.magic-check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 253, 247, 0.85);
+  cursor: pointer;
+}
+
+.magic-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent, #ff4d1c);
+}
+
+.magic-check small {
+  grid-column: 2;
+  font-weight: 400;
+  font-size: 11px;
+  color: rgba(255, 253, 247, 0.5);
+}
+
+.magic-eyedropper {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.magic-swatch-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.magic-span-2 {
+  grid-column: span 2;
+}
+
+.magic-layer-item.is-locked {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.magic-layer-item.is-locked:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.magic-lock {
+  padding: 0 6px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.magic-redetect {
+  width: 100%;
+  margin-top: 10px;
+}
+
+/* Joyida tahrirlash: ramka nozik, fon — kanvasdagi toza joy. */
+.magic-inline-textarea {
+  outline: 1.5px dashed rgba(255, 77, 28, 0.9);
+  outline-offset: 3px;
+  overflow: hidden;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+  min-width: 8px;
+}
+
+@media (max-width: 640px) {
+  .magic-prop-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .magic-check input {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.magic-layers-backdrop textarea.magic-inline-textarea {
+  font-size: var(--ml-font-size, 16px) !important;
+}
+
+.magic-inline-textarea::selection {
+  background: rgba(255, 77, 28, 0.35);
+}
+
+.magic-btn,
+.magic-brand-badge {
+  white-space: nowrap;
+}
+
+.magic-header-left {
+  min-width: 0;
+}
+
+.magic-header-titles {
+  min-width: 0;
+}
+
+.magic-header-titles h2,
+.magic-header-titles p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.magic-section-title > span {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.magic-section-title .magic-btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 1280px) {
+  .magic-brand-badge {
+    display: none;
+  }
+}

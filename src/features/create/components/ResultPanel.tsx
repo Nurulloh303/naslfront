@@ -3,8 +3,8 @@ import { AnalysisProgress } from "./AnalysisProgress";
 import { TextLayerEditor } from "./TextLayerEditor";
 import { MagicLayersEditor, type MagicLayersSource } from "./MagicLayersEditor";
 import { ListingResult } from "./ListingBlocks";
-import type { ContentMode, GenerationJob } from "../domain/types";
-import type { SeparateLayersResponse } from "../services/createApi";
+import type { ContentMode, GenerationJob, GenerationResult } from "../domain/types";
+import type { SeparateLayersOptions, SeparateLayersResponse } from "../services/createApi";
 import { useLanguage } from "../../../i18n/LanguageContext";
 
 type Props = {
@@ -25,7 +25,7 @@ type Props = {
   /** Brauzer yig'gan rasmni loyihaga saqlash. Token sarflanmaydi. */
   onComposeSlide?: (variant: number, imageDataUrl: string) => Promise<boolean> | void;
   /** AI orqali rasmni shaffof qatlamlarga ajratish (Magic Layers). */
-  onSeparateLayers?: (variant: number, options?: { numLayers?: number; force?: boolean }) => Promise<SeparateLayersResponse>;
+  onSeparateLayers?: (variant: number, options?: SeparateLayersOptions) => Promise<SeparateLayersResponse>;
   /** Magic Layers muharriridagi "← Orqaga": bosh sahifaga (karta yaratish) qaytish. */
   onBack?: () => void;
   /** Тавсиф yozishda xatolik bo'lsa — qayta urinish. */
@@ -148,8 +148,22 @@ function SlideFix({ variant, count, note, busy, disabled, onSubmit }: {
   </div>;
 }
 
-/** Joriy qatlamlar formati: matn qatlamlari bilan. Eskisi ochilganda qayta ajratiladi. */
-const LAYERS_VERSION = 2;
+/** Joriy qatlamlar formati: asl rasm + toza fon + matnlar. Boshqa versiya ochilganda qayta ajratiladi. */
+const LAYERS_VERSION = 3;
+
+/** Natija/javobdan muharrir manbasini yig'adi. `baseUrl` bo'lmasa — natijaning o'z rasmi. */
+function toMagicSource(result: GenerationResult, data?: Partial<SeparateLayersResponse>): MagicLayersSource {
+  const pick = <T,>(a: T | undefined, b: T | undefined) => (a !== undefined ? a : b);
+  return {
+    baseUrl: pick(data?.baseUrl, result.baseUrl) || result.previewUrl || result.downloadUrl,
+    cleanUrl: pick(data?.cleanUrl, result.cleanUrl) ?? null,
+    width: data?.width || result.width,
+    height: data?.height || result.height,
+    layers: pick(data?.layers, result.layers) ?? [],
+    textLayers: pick(data?.textLayers, result.textLayers) ?? [],
+    textRemoved: pick(data?.textRemoved, result.textRemoved),
+  };
+}
 
 export function ResultPanel({ job, contentType, hasReference, onGenerate, onDownload, onEditSettings, onNewProject, onRate, onCancel, cancelling, onRegenerateSlide, onComposeSlide, onSeparateLayers, onBack, onRetryListing }: Props) {
   const { t } = useLanguage();
@@ -224,7 +238,7 @@ export function ResultPanel({ job, contentType, hasReference, onGenerate, onDown
   };
 
   const openMagic = (variant: number, source: MagicLayersSource) => {
-    setMagicSource({ layers: source.layers, textLayers: source.textLayers ?? [], textRemoved: source.textRemoved });
+    setMagicSource(source);
     setActiveMagicVariant(variant);
   };
 
@@ -235,27 +249,25 @@ export function ResultPanel({ job, contentType, hasReference, onGenerate, onDown
 
   const handleOpenLayers = async (variant: number) => {
     const targetResult = job.results[variant - 1];
-    const cached: MagicLayersSource | null = targetResult?.layers && targetResult.layers.length > 0
-      ? { layers: targetResult.layers, textLayers: targetResult.textLayers ?? [], textRemoved: targetResult.textRemoved }
-      : null;
-    // Yangi formatdagi (matn qatlamlari bor) natija — darhol ochamiz.
-    if (cached && targetResult.layersVersion === LAYERS_VERSION) {
-      openMagic(variant, cached);
+    if (!targetResult) return;
+    // v3 formatidagi natija — darhol ochamiz (matnlar bo'lmasa ham: asl rasm + "Matn qo'shish").
+    if (targetResult.layersVersion === LAYERS_VERSION && (targetResult.baseUrl || targetResult.textLayers)) {
+      openMagic(variant, toMagicSource(targetResult));
       return;
     }
+    const fallback = toMagicSource(targetResult, { layers: [], textLayers: [], cleanUrl: null });
     if (!onSeparateLayers) {
-      if (cached) openMagic(variant, cached);
+      openMagic(variant, fallback);
       return;
     }
-    // Qatlam yo'q yoki eski format (layersVersion !== 2) — qayta ajratamiz (force'siz).
+    // Hali ajratilmagan yoki boshqa versiya — qayta ajratamiz (force'siz).
     try {
       setLoadingLayersVariant(variant);
       const res = await onSeparateLayers(variant);
-      if (res.layers && res.layers.length > 0) openMagic(variant, res);
-      else if (cached) openMagic(variant, cached);
+      openMagic(variant, toMagicSource(targetResult, res));
     } catch {
-      // Xato createFlow notice orqali ko'rsatiladi; eski qatlamlar bo'lsa — ular bilan ochamiz.
-      if (cached) openMagic(variant, cached);
+      // Xato createFlow notice orqali ko'rsatiladi; asl rasm bilan baribir ochamiz (matn qo'shish mumkin).
+      openMagic(variant, fallback);
     } finally {
       setLoadingLayersVariant(null);
     }
@@ -297,11 +309,7 @@ export function ResultPanel({ job, contentType, hasReference, onGenerate, onDown
         key={`${job.id}-${activeMagicVariant}`}
         jobId={job.id}
         variant={activeMagicVariant}
-        initialLayers={magicSource.layers}
-        initialTextLayers={magicSource.textLayers}
-        textRemoved={magicSource.textRemoved}
-        resultWidth={job.results[activeMagicVariant - 1].width}
-        resultHeight={job.results[activeMagicVariant - 1].height}
+        source={magicSource}
         onClose={closeMagic}
         onBack={() => {
           closeMagic();
@@ -315,11 +323,7 @@ export function ResultPanel({ job, contentType, hasReference, onGenerate, onDown
         }}
         onReseparate={
           onSeparateLayers
-            ? () => onSeparateLayers(activeMagicVariant, { force: true }).then((res) => ({
-              layers: res.layers,
-              textLayers: res.textLayers ?? [],
-              textRemoved: res.textRemoved,
-            }))
+            ? () => onSeparateLayers(activeMagicVariant, { force: true }).then((res) => toMagicSource(job.results[activeMagicVariant - 1], res))
             : undefined
         }
       />

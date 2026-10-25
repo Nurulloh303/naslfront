@@ -1,5 +1,5 @@
 import { useLanguage } from "../../../../i18n/LanguageContext";
-import { COLOR_SWATCHES, FONT_FAMILIES, FONT_WEIGHTS, PLATE_SWATCHES, type TextLayerItem, type TextPatch } from "./editorTypes";
+import { COLOR_SWATCHES, FONT_FAMILIES, FONT_WEIGHTS, PLATE_SWATCHES, isTextDirty, type TextLayerItem, type TextPatch } from "./editorTypes";
 import { fontStack } from "./renderLayers";
 
 type Props = {
@@ -8,35 +8,43 @@ type Props = {
   onEditInline: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
+  onReset: () => void;
 };
 
-const MIN_FONT = 8;
-const MAX_FONT = 400;
+const MIN_FONT = 6;
+const MAX_FONT = 600;
 
 function closestWeight(weight: number): number {
-  return FONT_WEIGHTS.reduce((best, w) => (Math.abs(w.value - weight) < Math.abs(best - weight) ? w.value : best), FONT_WEIGHTS[0].value as number);
+  return FONT_WEIGHTS.reduce<number>((best, w) => (Math.abs(w - weight) < Math.abs(best - weight) ? w : best), FONT_WEIGHTS[0]);
 }
 
-/** Tanlangan matn qatlamining sozlamalari (o'ng panel / pastki varaq). */
-export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onDelete, onMoveUp, onMoveDown }: Props) {
+/** Tanlangan matnning sozlamalari (o'ng panel / telefonda pastki varaq). */
+export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onDelete, onReset }: Props) {
   const { t } = useLanguage();
   const key = (field: string) => `${field}:${layer.id}`;
   const activeWeight = closestWeight(layer.fontWeight);
-  const families: readonly string[] = FONT_FAMILIES.includes(layer.fontFamily as (typeof FONT_FAMILIES)[number])
+  const families: readonly string[] = (FONT_FAMILIES as readonly string[]).includes(layer.fontFamily)
     ? FONT_FAMILIES
     : [layer.fontFamily, ...FONT_FAMILIES];
+  const dirty = isTextDirty(layer);
+  const originalColor = layer.pristine?.color ?? null;
+  const spacingRange = Math.max(4, Math.round(layer.fontSize * 0.5));
 
   const setFontSize = (value: number) => {
     if (!Number.isFinite(value)) return;
-    onChange({ fontSize: Math.round(Math.min(MAX_FONT, Math.max(MIN_FONT, value))) }, key("fontSize"));
+    const fontSize = Math.round(Math.min(MAX_FONT, Math.max(MIN_FONT, value)));
+    // Harf oralig'i kegl bilan birga o'zgaradi — ko'rinish saqlanadi.
+    const letterSpacing = layer.fontSize > 0 ? Math.round(((layer.letterSpacing || 0) * fontSize) / layer.fontSize * 10) / 10 : layer.letterSpacing;
+    onChange({ fontSize, letterSpacing }, key("fontSize"));
   };
 
   return (
     <div className="magic-layer-props">
       <div className="magic-section-title">
-        <span>{t("magicLayers.textLayer")}</span>
+        <span>
+          {t("magicLayers.textLayer")}
+          {layer.pristine ? <em className={`magic-state-pill ${dirty ? "is-dirty" : ""}`}>{dirty ? t("magicLayers.stateEdited") : t("magicLayers.stateOriginal")}</em> : null}
+        </span>
         <button type="button" className="magic-btn magic-btn-secondary magic-btn-sm" onClick={onEditInline}>
           ✎ {t("magicLayers.editText")}
         </button>
@@ -52,6 +60,36 @@ export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onD
           onChange={(e) => onChange({ text: e.target.value }, key("text"))}
         />
       </label>
+
+      <div className="magic-prop-grid">
+        <div className="magic-prop-row">
+          <span className="magic-prop-header"><span>{t("magicLayers.fontFamily")}</span></span>
+          <select
+            className="magic-select"
+            value={layer.fontFamily}
+            style={{ fontFamily: fontStack(layer.fontFamily) }}
+            aria-label={t("magicLayers.fontFamily")}
+            onChange={(e) => onChange({ fontFamily: e.target.value })}
+          >
+            {families.map((family) => (
+              <option key={family} value={family} style={{ fontFamily: fontStack(family) }}>{family}</option>
+            ))}
+          </select>
+        </div>
+        <div className="magic-prop-row">
+          <span className="magic-prop-header"><span>{t("magicLayers.fontWeight")}</span></span>
+          <select
+            className="magic-select"
+            value={activeWeight}
+            aria-label={t("magicLayers.fontWeight")}
+            onChange={(e) => onChange({ fontWeight: Number(e.target.value) })}
+          >
+            {FONT_WEIGHTS.map((w) => (
+              <option key={w} value={w}>{w} · {t(`magicLayers.weight${w}`)}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       <div className="magic-prop-row">
         <div className="magic-prop-header">
@@ -70,43 +108,17 @@ export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onD
           type="range"
           className="magic-slider"
           min={MIN_FONT}
-          max={Math.max(240, Math.round(layer.fontSize))}
+          max={Math.max(240, Math.round(layer.fontSize * 1.5))}
           step={1}
           value={layer.fontSize}
+          aria-label={t("magicLayers.fontSize")}
           onChange={(e) => setFontSize(parseFloat(e.target.value))}
         />
-      </div>
-
-      <div className="magic-prop-row">
-        <span className="magic-prop-header"><span>{t("magicLayers.fontFamily")}</span></span>
-        <select
-          className="magic-select"
-          value={layer.fontFamily}
-          style={{ fontFamily: fontStack(layer.fontFamily) }}
-          onChange={(e) => onChange({ fontFamily: e.target.value })}
-        >
-          {families.map((family) => (
-            <option key={family} value={family} style={{ fontFamily: fontStack(family) }}>{family}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="magic-prop-row">
-        <span className="magic-prop-header"><span>{t("magicLayers.fontWeight")}</span></span>
-        <div className="magic-segmented" role="group" aria-label={t("magicLayers.fontWeight")}>
-          {FONT_WEIGHTS.map((w) => (
-            <button
-              key={w.value}
-              type="button"
-              className={activeWeight === w.value ? "is-active" : ""}
-              aria-pressed={activeWeight === w.value}
-              style={{ fontWeight: w.value }}
-              onClick={() => onChange({ fontWeight: w.value })}
-            >
-              {t(`magicLayers.${w.key}`)}
-            </button>
-          ))}
-        </div>
+        <label className="magic-check">
+          <input type="checkbox" checked={layer.autoFit} onChange={(e) => onChange({ autoFit: e.target.checked })} />
+          <span>{t("magicLayers.autoFit")}</span>
+          <small>{t("magicLayers.autoFitHint")}</small>
+        </label>
       </div>
 
       <div className="magic-prop-row">
@@ -138,6 +150,23 @@ export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onD
       </div>
 
       <div className="magic-prop-row">
+        <div className="magic-prop-header">
+          <span>{t("magicLayers.letterSpacing")}</span>
+          <b>{(layer.letterSpacing || 0).toFixed(1)}px</b>
+        </div>
+        <input
+          type="range"
+          className="magic-slider"
+          min={-Math.round(spacingRange / 3)}
+          max={spacingRange}
+          step={0.5}
+          value={layer.letterSpacing || 0}
+          aria-label={t("magicLayers.letterSpacing")}
+          onChange={(e) => onChange({ letterSpacing: parseFloat(e.target.value) }, key("letterSpacing"))}
+        />
+      </div>
+
+      <div className="magic-prop-row">
         <span className="magic-prop-header"><span>{t("magicLayers.color")}</span><b>{layer.color}</b></span>
         <div className="magic-swatches">
           {COLOR_SWATCHES.map((color) => (
@@ -159,6 +188,18 @@ export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onD
             />
           </label>
         </div>
+        {originalColor ? (
+          <button
+            type="button"
+            className="magic-btn magic-btn-secondary magic-btn-sm magic-eyedropper"
+            disabled={layer.color.toUpperCase() === originalColor.toUpperCase()}
+            onClick={() => onChange({ color: originalColor })}
+            title={t("magicLayers.originalColorTitle")}
+          >
+            <span className="magic-swatch-dot" style={{ background: originalColor }} aria-hidden="true" />
+            💧 {t("magicLayers.originalColor")}
+          </button>
+        ) : null}
       </div>
 
       <div className="magic-prop-row">
@@ -204,6 +245,7 @@ export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onD
           max={1}
           step={0.02}
           value={layer.opacity}
+          aria-label={t("magicLayers.opacity")}
           onChange={(e) => onChange({ opacity: parseFloat(e.target.value) }, key("opacity"))}
         />
       </div>
@@ -211,8 +253,11 @@ export function TextLayerProps({ layer, onChange, onEditInline, onDuplicate, onD
       <div className="magic-action-grid">
         <button type="button" className="magic-btn magic-btn-secondary" onClick={onDuplicate}>⧉ {t("magicLayers.duplicate")}</button>
         <button type="button" className="magic-btn magic-btn-secondary" onClick={onDelete}>🗑 {t("magicLayers.delete")}</button>
-        <button type="button" className="magic-btn magic-btn-secondary" onClick={onMoveUp}>▲ {t("magicLayers.moveUp")}</button>
-        <button type="button" className="magic-btn magic-btn-secondary" onClick={onMoveDown}>▼ {t("magicLayers.moveDown")}</button>
+        {layer.pristine ? (
+          <button type="button" className="magic-btn magic-btn-secondary magic-span-2" onClick={onReset} disabled={!dirty}>
+            ↺ {t("magicLayers.resetText")}
+          </button>
+        ) : null}
       </div>
     </div>
   );

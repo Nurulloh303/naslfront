@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import { marketplacePresets } from "../domain/marketplacePresets";
 import { defaultBrief, defaultSettings, type CreateFlowState, type GenerationSettings, type ProductAsset, type ProductBrief, type Quote } from "../domain/types";
-import { createP0Api } from "../services/createApi";
+import { createP0Api, type SeparateLayersOptions } from "../services/createApi";
 
 type Action =
   | { type: "ASSETS_SET"; assets: ProductAsset[] }
@@ -331,22 +331,24 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
   /**
    * AI yordamida rasmni qatlamlarga (fon, mahsulot, matn) ajratish (Magic Layers).
    */
-  const separateLayers = async (variant: number, options?: { numLayers?: number; force?: boolean }) => {
+  const separateLayers = async (variant: number, options?: SeparateLayersOptions) => {
     const jobId = state.job.id;
     if (!jobId) throw new Error("Loyiha topilmadi");
     try {
       const result = await api.separateLayers(jobId, variant, options);
       if (result.job) {
         dispatch({ type: "JOB_UPDATE", job: result.job });
-      } else if (result.layers) {
+      } else if (result.layers || result.textLayers) {
         const updatedResults = state.job.results.map((r, idx) => {
           if (idx + 1 === variant) {
             return {
               ...r,
-              layers: result.layers,
+              layers: result.layers ?? [],
               textLayers: result.textLayers ?? [],
               textRemoved: result.textRemoved,
               layersVersion: result.layersVersion,
+              baseUrl: result.baseUrl,
+              cleanUrl: result.cleanUrl,
             };
           }
           return r;

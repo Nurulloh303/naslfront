@@ -145,9 +145,13 @@ export type GenerationLayer = {
   height?: number;
 };
 
+/** Rasm piksel fazosidagi to'rtburchak. */
+export type GenerationRect = { x: number; y: number; width: number; height: number };
+
 /**
- * Tahrirlanadigan matn qatlami (Magic Layers v2).
- * Koordinatalar — natija rasmining piksel fazosida, qutining yuqori-chap burchagi.
+ * Tahrirlanadigan matn qatlami (Magic Layers v3).
+ * Koordinatalar — natija rasmining piksel fazosida: `x/y/width/height` —
+ * yozuvning o'zini qamragan zich quti (yuqori-chap burchak).
  */
 export type GenerationTextLayer = {
   id: string;
@@ -163,8 +167,15 @@ export type GenerationTextLayer = {
   fontFamily: string;
   lineHeight: number;
   uppercase: boolean;
+  /** Harflar orasidagi qo'shimcha masofa (rasm px). Eski natijalarda yo'q — 0. */
+  letterSpacing?: number;
   background: string | null;
   rotation: number;
+  /**
+   * Asl yozuvni o'chirish uchun (paddingli) quti: tahrirlanganda shu joy
+   * `cleanUrl` rasmidan nusxalanadi. Eski natijalarda yo'q.
+   */
+  source?: GenerationRect | null;
 };
 
 export type GenerationResult = {
@@ -196,8 +207,12 @@ export type GenerationResult = {
   textLayers?: GenerationTextLayer[];
   /** Matn rastr qatlamlardan olib tashlanganmi. false — eski yozuv ostida ko'rinishi mumkin. */
   textRemoved?: boolean;
-  /** Qatlamlar formati versiyasi. 2 — matn qatlamlari bilan. */
+  /** Qatlamlar formati versiyasi. 3 — asl rasm + toza fon + matn qatlamlari. */
   layersVersion?: number;
+  /** Magic Layers v3: asl rasm (o'zgarmaydi). */
+  baseUrl?: string;
+  /** Magic Layers v3: matnsiz (toza) fon. null — tayyorlab bo'lmadi. */
+  cleanUrl?: string | null;
 };
 
 export type GenerationJob = {

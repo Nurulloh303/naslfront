@@ -1,12 +1,14 @@
 /**
- * Magic Layers: kanvasga chizish, matnni joylash, geometriya va hit-test.
+ * Magic Layers v3: kanvasga chizish, matnni joylash, geometriya va hit-test.
  *
- * React'siz toza funksiyalar — muharrir ham, eksport (yuklab olish/saqlash)
- * ham bir xil kod bilan chizadi, shuning uchun ekranda ko'ringan narsa
- * faylda ham aynan shunday chiqadi.
+ * Sahna: asl rasm (o'zgarmaydi) → ixtiyoriy rastr qatlamlar → o'zgargan
+ * matnlar ostidagi "yamoq" (toza fondan) → yangi matnlar. Tegilmagan matnlar
+ * umuman chizilmaydi — asl piksellar ko'rinadi.
+ *
+ * React'siz toza funksiyalar — muharrir ham, eksport ham bir xil kod bilan
+ * chizadi, shuning uchun ekranda ko'ringan narsa faylda ham aynan shunday.
  */
-import { FONT_STACK } from "../../domain/drawTextLayer";
-import type { EditorLayer, ImageLayerItem, TextLayerItem } from "./editorTypes";
+import { isTextDirty, type EditorLayer, type ImageLayerItem, type TextLayerItem } from "./editorTypes";
 
 export type Point = { x: number; y: number };
 export type Rect = { x: number; y: number; width: number; height: number };
@@ -17,21 +19,24 @@ export type HandleId = "nw" | "ne" | "se" | "sw" | "e" | "w";
 /* ------------------------------------------------------------------ */
 
 const FAMILY_STACKS: Record<string, string> = {
-  Inter: FONT_STACK,
+  Inter: '"Inter", "Helvetica Neue", Arial, sans-serif',
   Montserrat: '"Montserrat", "Inter", Arial, sans-serif',
-  Roboto: '"Roboto", "Inter", Arial, sans-serif',
+  Oswald: '"Oswald", "Arial Narrow", Arial, sans-serif',
+  Anton: '"Anton", "Oswald", Impact, sans-serif',
+  "Playfair Display": '"Playfair Display", Georgia, "Times New Roman", serif',
+  Nunito: '"Nunito", "Inter", Arial, sans-serif',
+  Caveat: '"Caveat", "Segoe Print", cursive',
   Arial: 'Arial, "Helvetica Neue", Helvetica, sans-serif',
-  Georgia: 'Georgia, "Times New Roman", serif',
 };
 
 /** Google Fonts'dan yuklanadigan (tizimda bo'lmasligi mumkin) shriftlar. */
-const WEB_FONTS = new Set(["Inter", "Montserrat", "Roboto"]);
+const WEB_FONTS = new Set(["Inter", "Montserrat", "Oswald", "Anton", "Playfair Display", "Nunito", "Caveat"]);
 
 export function fontStack(family: string): string {
-  return FAMILY_STACKS[family] ?? `"${family.replace(/"/g, "")}", ${FONT_STACK}`;
+  return FAMILY_STACKS[family] ?? `"${family.replace(/"/g, "")}", "Inter", Arial, sans-serif`;
 }
 
-export function fontSpec(layer: Pick<TextLayerItem, "fontFamily" | "fontWeight" | "fontSize">, size = layer.fontSize): string {
+export function fontSpec(layer: Pick<TextLayerItem, "fontFamily" | "fontWeight">, size: number): string {
   return `${Math.round(layer.fontWeight)} ${Math.max(1, size)}px ${fontStack(layer.fontFamily)}`;
 }
 
@@ -39,13 +44,13 @@ export function fontSpec(layer: Pick<TextLayerItem, "fontFamily" | "fontWeight" 
 const FONT_SAMPLE = "AaBbÑñ0123 АаЁёЯя ЎўҚқҒғҲҳ Oʻoʻ Gʻgʻ";
 
 /**
- * Matn qatlamlari ishlatadigan shriftlar yuklanishini kutadi.
- * Chizish va eksportdan oldin chaqiriladi, aks holda birinchi kadr zaxira
- * shriftda chiqadi. Hech qachon xato tashlamaydi; ko'pi bilan `timeoutMs` kutadi.
+ * Matn qatlamlari ishlatadigan shriftlar yuklanishini kutadi (`document.fonts.load`).
+ * Chizish va eksportdan oldin chaqiriladi. Hech qachon xato tashlamaydi;
+ * ko'pi bilan `timeoutMs` kutadi.
  */
 export async function ensureFonts(
   layers: Array<Pick<TextLayerItem, "fontFamily" | "fontWeight">>,
-  timeoutMs = 4000,
+  timeoutMs = 5000,
 ): Promise<void> {
   if (typeof document === "undefined" || !("fonts" in document)) return;
   const specs = new Set<string>();
@@ -53,15 +58,17 @@ export async function ensureFonts(
     if (!WEB_FONTS.has(layer.fontFamily)) continue;
     specs.add(`${Math.round(layer.fontWeight)} 32px "${layer.fontFamily}"`);
   }
+  if (!specs.size) return;
   const work = Promise.all([...specs].map((spec) => document.fonts.load(spec, FONT_SAMPLE).catch(() => [])))
-    .then(() => document.fonts.ready)
     .then(() => undefined)
     .catch(() => undefined);
-  await Promise.race([work, new Promise<void>((resolve) => window.setTimeout(resolve, timeoutMs))]);
+  let timer = 0;
+  await Promise.race([work, new Promise<void>((resolve) => { timer = window.setTimeout(resolve, timeoutMs); })]);
+  window.clearTimeout(timer);
 }
 
 /* ------------------------------------------------------------------ */
-/* Matnni joylash                                                      */
+/* O'lchash                                                            */
 /* ------------------------------------------------------------------ */
 
 let measureContext: CanvasRenderingContext2D | null = null;
@@ -72,53 +79,66 @@ function getMeasureContext(): CanvasRenderingContext2D | null {
   return measureContext;
 }
 
-function breakLongWord(ctx: CanvasRenderingContext2D, word: string, maxWidth: number): string[] {
-  const parts: string[] = [];
-  let current = "";
-  for (const char of Array.from(word)) {
-    const candidate = current + char;
-    if (current && ctx.measureText(candidate).width > maxWidth) {
-      parts.push(current);
-      current = char;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current) parts.push(current);
-  return parts;
+const NATIVE_LETTER_SPACING = typeof CanvasRenderingContext2D !== "undefined" && "letterSpacing" in CanvasRenderingContext2D.prototype;
+
+type CtxWithSpacing = CanvasRenderingContext2D & { letterSpacing?: string };
+
+function setSpacing(ctx: CanvasRenderingContext2D, px: number) {
+  if (NATIVE_LETTER_SPACING) (ctx as CtxWithSpacing).letterSpacing = `${px}px`;
 }
 
-/** Bitta paragrafni so'zlar bo'yicha `maxWidth` ga sig'diradi. */
-function wrapParagraph(ctx: CanvasRenderingContext2D, paragraph: string, maxWidth: number): string[] {
-  const words = paragraph.split(/[ \t]+/).filter(Boolean);
-  if (!words.length) return [""];
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const pieces = ctx.measureText(word).width > maxWidth ? breakLongWord(ctx, word, maxWidth) : [word];
-    for (const piece of pieces) {
-      const candidate = current ? `${current} ${piece}` : piece;
-      if (current && ctx.measureText(candidate).width > maxWidth) {
-        lines.push(current);
-        current = piece;
-      } else {
-        current = candidate;
-      }
-    }
+type LineMetrics = { advance: number; left: number; right: number; ascent: number; descent: number };
+
+/** Qator o'lchami. `left/right` — `textAlign=left` dagi nuqtadan siyoh chetlarigacha. */
+function measureLine(ctx: CanvasRenderingContext2D, text: string, spacing: number): LineMetrics {
+  if (!text) return { advance: 0, left: 0, right: 0, ascent: 0, descent: 0 };
+  setSpacing(ctx, spacing);
+  const m = ctx.measureText(text);
+  if (NATIVE_LETTER_SPACING || !spacing) {
+    // Oxirgi harfdan keyingi bo'shliq siyohga kirmaydi.
+    return { advance: m.width, left: m.actualBoundingBoxLeft || 0, right: m.actualBoundingBoxRight || m.width, ascent: m.actualBoundingBoxAscent || 0, descent: m.actualBoundingBoxDescent || 0 };
   }
-  lines.push(current);
-  return lines;
+  const extra = spacing * Math.max(0, Array.from(text).length - 1);
+  return { advance: m.width + extra, left: m.actualBoundingBoxLeft || 0, right: (m.actualBoundingBoxRight || m.width) + extra, ascent: m.actualBoundingBoxAscent || 0, descent: m.actualBoundingBoxDescent || 0 };
 }
+
+function fillLine(ctx: CanvasRenderingContext2D, text: string, x: number, baseline: number, spacing: number) {
+  if (!text) return;
+  if (NATIVE_LETTER_SPACING || !spacing) {
+    setSpacing(ctx, spacing);
+    ctx.fillText(text, x, baseline);
+    return;
+  }
+  // Eski brauzerlar: harfma-harf.
+  let cursor = x;
+  for (const char of Array.from(text)) {
+    ctx.fillText(char, cursor, baseline);
+    cursor += ctx.measureText(char).width + spacing;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Matnni joylash                                                      */
+/* ------------------------------------------------------------------ */
 
 export type TextLayout = {
-  /** Matnning o'zi egallagan quti (plashka paddingisiz). */
-  box: Rect;
-  /** Plashka bilan birga tashqi quti — tanlash va hit-test shu bo'yicha. */
-  outer: Rect;
+  /** Haqiqiy (avto-o'lcham hisobga olingan) kegl va harf oralig'i. */
+  fontSize: number;
+  letterSpacing: number;
   lines: string[];
   lineHeightPx: number;
+  draws: Array<{ text: string; x: number; baseline: number }>;
+  /** Matn egallagan quti (quti + chetga chiqqan siyoh). */
+  rect: Rect;
+  /** Plashka bilan birga — tanlash va hit-test shu bo'yicha. */
+  outer: Rect;
   padX: number;
   padY: number;
+  /** Textarea uchun: birinchi CSS qator qutisining yuqorisi. */
+  lineBoxTop: number;
+  /** Textarea uchun: gorizontal oraliq (advance bo'yicha). */
+  areaLeft: number;
+  areaWidth: number;
 };
 
 export function displayText(layer: Pick<TextLayerItem, "text" | "uppercase">, text = layer.text): string {
@@ -126,27 +146,115 @@ export function displayText(layer: Pick<TextLayerItem, "text" | "uppercase">, te
 }
 
 /** Plashka (background) paddingi — kegl bo'yicha. */
-export function platePadding(layer: Pick<TextLayerItem, "background" | "fontSize">): { padX: number; padY: number } {
-  if (!layer.background) return { padX: 0, padY: 0 };
-  return { padX: Math.round(layer.fontSize * 0.35), padY: Math.round(layer.fontSize * 0.18) };
+export function platePadding(background: string | null, fontSize: number): { padX: number; padY: number } {
+  if (!background) return { padX: 0, padY: 0 };
+  return { padX: Math.round(fontSize * 0.35), padY: Math.round(fontSize * 0.2) };
 }
 
+/**
+ * Matnni qutiga joylaydi. Qatorlar faqat "\n" bo'yicha bo'linadi (avtomatik
+ * ko'chirish yo'q — asl yozuv qanday bo'lsa, shunday). Siyoh qutining
+ * yuqorisidan boshlanadi; tekislash siyoh bo'yicha: chap — chap chet, markaz —
+ * qutining markazi, o'ng — o'ng chet. Avto-o'lcham yoqilgan bo'lsa, eng uzun
+ * qator quti kengligiga sig'guncha kegl kichrayadi (kattalashmaydi).
+ */
 export function layoutText(layer: TextLayerItem, textOverride?: string): TextLayout {
-  const ctx = getMeasureContext();
-  const lineHeightPx = layer.fontSize * layer.lineHeight;
   const text = displayText(layer, textOverride ?? layer.text);
-  let lines: string[];
-  if (ctx) {
-    ctx.font = fontSpec(layer);
-    lines = text.split("\n").flatMap((p) => wrapParagraph(ctx, p, Math.max(1, layer.width)));
-  } else {
-    lines = text.split("\n");
+  const lines = text.split("\n");
+  const ctx = getMeasureContext();
+  let fontSize = layer.fontSize;
+  let spacing = layer.letterSpacing || 0;
+
+  const measureAll = (size: number, ls: number): LineMetrics[] => {
+    if (!ctx) return lines.map((l) => ({ advance: l.length * size * 0.55, left: 0, right: l.length * size * 0.55, ascent: size * 0.72, descent: size * 0.2 }));
+    ctx.font = fontSpec(layer, size);
+    return lines.map((l) => measureLine(ctx, l, ls));
+  };
+  const inkWidth = (m: LineMetrics) => Math.max(0, m.left + m.right);
+
+  let metrics = measureAll(fontSize, spacing);
+  if (layer.autoFit && layer.width > 0) {
+    for (let i = 0; i < 4; i += 1) {
+      const widest = Math.max(0, ...metrics.map(inkWidth));
+      if (widest <= layer.width * 1.001 || widest <= 0) break;
+      const factor = (layer.width / widest) * (i < 3 ? 1 : 0.995);
+      fontSize = Math.max(4, fontSize * factor);
+      spacing *= factor;
+      metrics = measureAll(fontSize, spacing);
+    }
   }
-  const height = Math.max(1, lines.length) * lineHeightPx;
-  const box = { x: layer.x, y: layer.y, width: layer.width, height };
-  const { padX, padY } = platePadding(layer);
-  const outer = { x: box.x - padX, y: box.y - padY, width: box.width + padX * 2, height: box.height + padY * 2 };
-  return { box, outer, lines, lineHeightPx, padX, padY };
+
+  let capHeight = fontSize * 0.72;
+  let fontAscent = fontSize * 0.92;
+  let fontDescent = fontSize * 0.24;
+  if (ctx) {
+    ctx.font = fontSpec(layer, fontSize);
+    setSpacing(ctx, 0);
+    const cap = ctx.measureText("H");
+    if (cap.actualBoundingBoxAscent) capHeight = cap.actualBoundingBoxAscent;
+    const fm = ctx.measureText("Hg");
+    if (fm.fontBoundingBoxAscent) fontAscent = fm.fontBoundingBoxAscent;
+    if (fm.fontBoundingBoxDescent) fontDescent = fm.fontBoundingBoxDescent;
+  }
+
+  const lineHeightPx = fontSize * layer.lineHeight;
+  const firstAscent = Math.max(capHeight, metrics[0]?.ascent ?? 0);
+  const firstBaseline = layer.y + firstAscent;
+  const boxLeft = layer.x;
+  const boxRight = layer.x + layer.width;
+  const boxCenter = layer.x + layer.width / 2;
+
+  let inkMin = Infinity;
+  let inkMax = -Infinity;
+  const draws = lines.map((line, index) => {
+    const m = metrics[index];
+    const iw = inkWidth(m);
+    const inkLeft = layer.align === "center" ? boxCenter - iw / 2 : layer.align === "right" ? boxRight - iw : boxLeft;
+    if (line) {
+      inkMin = Math.min(inkMin, inkLeft);
+      inkMax = Math.max(inkMax, inkLeft + iw);
+    }
+    return { text: line, x: inkLeft + m.left, baseline: firstBaseline + index * lineHeightPx };
+  });
+
+  const last = metrics[metrics.length - 1];
+  const lastDescent = last && last.advance > 0 ? Math.max(0, last.descent) : fontSize * 0.05;
+  const height = Math.max(fontSize * 0.5, firstAscent + (lines.length - 1) * lineHeightPx + lastDescent);
+  const left = Math.min(boxLeft, Number.isFinite(inkMin) ? inkMin : boxLeft);
+  const right = Math.max(boxRight, Number.isFinite(inkMax) ? inkMax : boxRight);
+  const rect = { x: left, y: layer.y, width: right - left, height };
+  const { padX, padY } = platePadding(layer.background, fontSize);
+  const outer = { x: rect.x - padX, y: rect.y - padY, width: rect.width + padX * 2, height: rect.height + padY * 2 };
+
+  const maxAdvance = Math.max(layer.width, ...metrics.map((m) => m.advance)) + fontSize * 0.1;
+  const areaLeft = layer.align === "center" ? boxCenter - maxAdvance / 2 : layer.align === "right" ? boxRight - maxAdvance : boxLeft;
+  const halfLeading = (lineHeightPx - (fontAscent + fontDescent)) / 2;
+
+  return {
+    fontSize,
+    letterSpacing: spacing,
+    lines,
+    lineHeightPx,
+    draws,
+    rect,
+    outer,
+    padX,
+    padY,
+    lineBoxTop: firstBaseline - halfLeading - fontAscent,
+    areaLeft,
+    areaWidth: maxAdvance,
+  };
+}
+
+/** Tegilmagan matn: asl rasmda turgan zich qutisi. */
+export function isUntouched(layer: TextLayerItem): boolean {
+  return Boolean(layer.pristine) && !isTextDirty(layer);
+}
+
+/** Tanlash/hit-test uchun quti. */
+export function textRect(layer: TextLayerItem): Rect {
+  if (isUntouched(layer)) return { x: layer.x, y: layer.y, width: layer.width, height: layer.height };
+  return layoutText(layer).outer;
 }
 
 /* ------------------------------------------------------------------ */
@@ -173,28 +281,26 @@ function applyRotation(ctx: CanvasRenderingContext2D, rect: Rect, degrees: numbe
   ctx.translate(-cx, -cy);
 }
 
-export function drawTextItem(ctx: CanvasRenderingContext2D, layer: TextLayerItem): void {
+export function drawTextItem(ctx: CanvasRenderingContext2D, layer: TextLayerItem, options: { glyphs?: boolean } = {}): void {
   const layout = layoutText(layer);
   ctx.save();
   ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity));
   applyRotation(ctx, layout.outer, layer.rotation);
 
   if (layer.background) {
-    roundRectPath(ctx, layout.outer, Math.round(layer.fontSize * 0.3));
+    roundRectPath(ctx, layout.outer, Math.round(layout.fontSize * 0.3));
     ctx.fillStyle = layer.background;
     ctx.fill();
   }
 
-  ctx.font = fontSpec(layer);
-  ctx.fillStyle = layer.color;
-  ctx.textBaseline = "middle";
-  ctx.textAlign = layer.align;
-  const anchorX = layer.align === "center" ? layout.box.x + layout.box.width / 2
-    : layer.align === "right" ? layout.box.x + layout.box.width
-    : layout.box.x;
-  layout.lines.forEach((line, index) => {
-    ctx.fillText(line, anchorX, layout.box.y + index * layout.lineHeightPx + layout.lineHeightPx / 2);
-  });
+  if (options.glyphs !== false) {
+    ctx.font = fontSpec(layer, layout.fontSize);
+    ctx.fillStyle = layer.color;
+    ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "left";
+    for (const draw of layout.draws) fillLine(ctx, draw.text, draw.x, draw.baseline, layout.letterSpacing);
+    setSpacing(ctx, 0);
+  }
   ctx.restore();
 }
 
@@ -207,39 +313,157 @@ export function drawImageItem(ctx: CanvasRenderingContext2D, layer: ImageLayerIt
   ctx.restore();
 }
 
+function isReady(image: HTMLImageElement | undefined): image is HTMLImageElement {
+  return Boolean(image && image.complete && image.naturalWidth > 0);
+}
+
+function clipRect(r: Rect, width: number, height: number): Rect | null {
+  const x = Math.max(0, Math.floor(r.x));
+  const y = Math.max(0, Math.floor(r.y));
+  const right = Math.min(width, Math.ceil(r.x + r.width));
+  const bottom = Math.min(height, Math.ceil(r.y + r.height));
+  if (right <= x || bottom <= y) return null;
+  return { x, y, width: right - x, height: bottom - y };
+}
+
+function intersect(a: Rect, b: Rect): Rect | null {
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.width, b.x + b.width);
+  const bottom = Math.min(a.y + a.height, b.y + b.height);
+  if (right <= x || bottom <= y) return null;
+  return { x, y, width: right - x, height: bottom - y };
+}
+
+/** Rasmning `r` qismini kanvasning aynan shu joyiga ko'chiradi (rasm o'lchami boshqacha bo'lsa ham). */
+function copyRegion(ctx: CanvasRenderingContext2D, image: HTMLImageElement, r: Rect, width: number, height: number) {
+  const sx = image.naturalWidth / width;
+  const sy = image.naturalHeight / height;
+  ctx.drawImage(image, r.x * sx, r.y * sy, r.width * sx, r.height * sy, r.x, r.y, r.width, r.height);
+}
+
 export type SceneOptions = {
   width: number;
   height: number;
+  /** Asl rasm — o'zgarmaydigan asos. */
+  base?: HTMLImageElement;
+  /** Matnsiz toza fon (yamoqlar shundan olinadi). */
+  clean?: HTMLImageElement;
   layers: EditorLayer[];
   images: Record<string, HTMLImageElement | undefined>;
-  /** Shu matn qatlami chizilmaydi (ustida textarea ochiq). */
-  skipTextId?: string | null;
-  /** Shaffof fon o'rniga shu rang bilan to'ldirish. */
-  background?: string;
+  /** Toza fon bo'lmasa — yamoq rangi (asl rasm atrofidan olingan). */
+  fills?: Record<string, string>;
+  /** Shu matn ustida textarea ochiq: yamoq chiziladi, harflar — yo'q. */
+  editingId?: string | null;
 };
 
-/** Barcha ko'rinadigan qatlamlarni z-tartibda chizadi. */
+/** Butun sahna: asl rasm → rastr qatlamlar → yamoqlar → o'zgargan matnlar. */
 export function renderScene(ctx: CanvasRenderingContext2D, options: SceneOptions): void {
-  const { width, height, layers, images, skipTextId } = options;
+  const { width, height, base, clean, layers, images, fills = {}, editingId } = options;
   ctx.clearRect(0, 0, width, height);
-  if (options.background) {
-    ctx.fillStyle = options.background;
-    ctx.fillRect(0, 0, width, height);
-  }
-  const visible = layers.filter((l) => !l.deleted && l.visible).sort((a, b) => a.order - b.order);
-  for (const layer of visible) {
-    if (layer.kind === "image") {
-      const image = images[layer.id];
-      if (image && image.complete && image.naturalWidth > 0) drawImageItem(ctx, layer, image, width, height);
-    } else if (layer.id !== skipTextId) {
-      drawTextItem(ctx, layer);
+  if (isReady(base)) ctx.drawImage(base, 0, 0, width, height);
+
+  const imageLayers = layers.filter((l): l is ImageLayerItem => l.kind === "image" && !l.deleted && l.visible).sort((a, b) => a.order - b.order);
+  let rasterDrawn = false;
+  for (const layer of imageLayers) {
+    const image = images[layer.id];
+    if (isReady(image)) {
+      drawImageItem(ctx, layer, image, width, height);
+      rasterDrawn = true;
     }
+  }
+
+  const texts = layers.filter((l): l is TextLayerItem => l.kind === "text").sort((a, b) => a.order - b.order);
+  const patched = texts.filter((t) => t.pristine && t.source && (isTextDirty(t) || t.id === editingId));
+  const patchRects: Rect[] = [];
+  for (const t of patched) {
+    const r = clipRect(t.source!, width, height);
+    if (!r) continue;
+    patchRects.push(r);
+    if (isReady(clean)) {
+      copyRegion(ctx, clean, r, width, height);
+    } else {
+      ctx.fillStyle = fills[t.id] ?? t.background ?? "#FFFFFF";
+      ctx.fillRect(r.x, r.y, r.width, r.height);
+    }
+  }
+
+  // Yamoq qo'shni (tegilmagan) yozuvga tegib ketsa — uning asl piksellarini qaytaramiz.
+  if (patchRects.length && !rasterDrawn && isReady(base)) {
+    for (const t of texts) {
+      if (t.id === editingId || !isUntouched(t)) continue;
+      const pad = Math.max(2, t.fontSize * 0.06);
+      const own = clipRect({ x: t.x - pad, y: t.y - pad, width: t.width + pad * 2, height: t.height + pad * 2 }, width, height);
+      if (!own) continue;
+      for (const p of patchRects) {
+        const overlap = intersect(own, p);
+        if (overlap) copyRegion(ctx, base, overlap, width, height);
+      }
+    }
+  }
+
+  for (const t of texts) {
+    if (t.deleted || !t.visible || isUntouched(t)) continue;
+    drawTextItem(ctx, t, { glyphs: t.id !== editingId });
   }
 }
 
-/** To'liq o'lchamdagi yakuniy rasm (eksport uchun). */
-export async function composeScene(options: Omit<SceneOptions, "skipTextId">): Promise<HTMLCanvasElement> {
-  await ensureFonts(options.layers.filter((l): l is TextLayerItem => l.kind === "text" && !l.deleted && l.visible));
+/**
+ * Toza fon bo'lmaganda: har matn `source` qutisi atrofidagi halqadan
+ * (asl rasm) median rangni oladi. Kanvas CORS bilan ifloslangan bo'lsa — {}.
+ */
+export function sampleFillColors(base: HTMLImageElement, width: number, height: number, texts: TextLayerItem[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  const targets = texts.filter((t) => t.pristine && t.source);
+  if (!targets.length) return out;
+  let data: Uint8ClampedArray;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return out;
+    ctx.drawImage(base, 0, 0, width, height);
+    data = ctx.getImageData(0, 0, width, height).data;
+  } catch {
+    return out;
+  }
+  for (const t of targets) {
+    const s = t.source!;
+    const band = 4;
+    const rs: number[] = [];
+    const gs: number[] = [];
+    const bs: number[] = [];
+    const push = (x: number, y: number) => {
+      const px = Math.round(x);
+      const py = Math.round(y);
+      if (px < 0 || py < 0 || px >= width || py >= height) return;
+      const i = (py * width + px) * 4;
+      rs.push(data[i]); gs.push(data[i + 1]); bs.push(data[i + 2]);
+    };
+    const stepX = Math.max(1, s.width / 120);
+    const stepY = Math.max(1, s.height / 60);
+    for (let d = 1; d <= band; d += 1) {
+      for (let x = s.x - band; x <= s.x + s.width + band; x += stepX) {
+        push(x, s.y - d);
+        push(x, s.y + s.height + d - 1);
+      }
+      for (let y = s.y; y <= s.y + s.height; y += stepY) {
+        push(s.x - d, y);
+        push(s.x + s.width + d - 1, y);
+      }
+    }
+    if (!rs.length) continue;
+    const median = (values: number[]) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
+    const hex = (n: number) => n.toString(16).padStart(2, "0");
+    out[t.id] = `#${hex(median(rs))}${hex(median(gs))}${hex(median(bs))}`.toUpperCase();
+  }
+  return out;
+}
+
+/** To'liq o'lchamdagi yakuniy rasm (eksport uchun): asl rasm + yamoqlar + matnlar. */
+export async function composeScene(options: Omit<SceneOptions, "editingId">): Promise<HTMLCanvasElement> {
+  await ensureFonts(options.layers.filter((l): l is TextLayerItem => l.kind === "text" && !l.deleted && !isUntouched(l)));
   const canvas = document.createElement("canvas");
   canvas.width = options.width;
   canvas.height = options.height;
@@ -317,27 +541,20 @@ function handlePoints(r: Rect, withSides: boolean): Array<{ id: HandleId; x: num
 }
 
 export function selectionRect(layer: EditorLayer, width: number, height: number): Rect {
-  return layer.kind === "image" ? imageBounds(layer, width, height) : layoutText(layer).outer;
+  return layer.kind === "image" ? imageBounds(layer, width, height) : textRect(layer);
 }
 
 export function hitHandle(layer: EditorLayer, pt: Point, width: number, height: number, hitRadius: number): HandleId | null {
   const rect = selectionRect(layer, width, height);
   const local = layer.kind === "text" ? toLocal(pt, rect, layer.rotation) : pt;
-  // Yon tutqichlar burchaklardan oldin tekshirilmaydi: kichik qutida burchak muhimroq.
   for (const handle of handlePoints(rect, layer.kind === "text")) {
     if (Math.hypot(local.x - handle.x, local.y - handle.y) <= hitRadius) return handle.id;
   }
   return null;
 }
 
-export function hitTextLayer(layer: TextLayerItem, pt: Point, slop = 0): boolean {
-  const rect = layoutText(layer).outer;
-  return inRect(toLocal(pt, rect, layer.rotation), rect, slop);
-}
-
 /**
  * Rastr qatlam pikselining shaffofligini tekshirish uchun kesh.
- * Har qatlam uchun kichraytirilgan offscreen canvas'dan `getImageData` olinadi.
  * Kanvas CORS bilan ifloslangan bo'lsa — `null` (to'rtburchak bo'yicha tekshiriladi).
  */
 export class AlphaHitCache {
@@ -345,10 +562,6 @@ export class AlphaHitCache {
 
   clear(): void {
     this.entries.clear();
-  }
-
-  delete(id: string): void {
-    this.entries.delete(id);
   }
 
   /** u, v — 0..1 oralig'idagi normallashtirilgan koordinatalar. */
@@ -363,7 +576,6 @@ export class AlphaHitCache {
     const { data, w, h } = entry;
     const cx = Math.floor(u * w);
     const cy = Math.floor(v * h);
-    // 1px atrofini ham ko'ramiz: yupqa chiziq va harflar chetini bosish oson bo'lsin.
     for (let dy = -1; dy <= 1; dy += 1) {
       for (let dx = -1; dx <= 1; dx += 1) {
         const px = cx + dx;
@@ -395,33 +607,54 @@ export class AlphaHitCache {
 }
 
 /**
- * Nuqta ostidagi eng yuqori qatlamni topadi. Rasm qatlamining shaffof joyini
- * bossangiz, tanlov pastdagi qatlamga "o'tib ketadi".
+ * Nuqta ostidagi qatlam: avval matnlar (bir nechtasi ustma-ust bo'lsa —
+ * eng kichigi, teng bo'lsa — eng yuqorisi), keyin rastr qatlamlar.
  */
 export function hitTestLayers(
   layers: EditorLayer[],
   pt: Point,
   options: { width: number; height: number; images: Record<string, HTMLImageElement | undefined>; alpha: AlphaHitCache; textSlop?: number },
 ): EditorLayer | null {
-  const candidates = layers.filter((l) => !l.deleted && l.visible).sort((a, b) => b.order - a.order);
-  for (const layer of candidates) {
-    if (layer.kind === "text") {
-      if (hitTextLayer(layer, pt, options.textSlop ?? 0)) return layer;
-      continue;
-    }
+  const visible = layers.filter((l) => !l.deleted && l.visible);
+  let best: { layer: TextLayerItem; area: number } | null = null;
+  for (const layer of visible) {
+    if (layer.kind !== "text") continue;
+    const rect = textRect(layer);
+    if (!inRect(toLocal(pt, rect, layer.rotation), rect, options.textSlop ?? 0)) continue;
+    const area = rect.width * rect.height;
+    if (!best || area < best.area - 1 || (Math.abs(area - best.area) <= 1 && layer.order > best.layer.order)) best = { layer, area };
+  }
+  if (best) return best.layer;
+
+  const images = visible.filter((l): l is ImageLayerItem => l.kind === "image").sort((a, b) => b.order - a.order);
+  for (const layer of images) {
     const rect = imageBounds(layer, options.width, options.height);
     if (!inRect(pt, rect)) continue;
     const image = options.images[layer.id];
     if (!image || !image.complete || !image.naturalWidth) continue;
-    const u = (pt.x - rect.x) / rect.width;
-    const v = (pt.y - rect.y) / rect.height;
-    const opaque = options.alpha.probe(layer.id, image, u, v);
+    const opaque = options.alpha.probe(layer.id, image, (pt.x - rect.x) / rect.width, (pt.y - rect.y) / rect.height);
     if (opaque === null || opaque) return layer;
   }
   return null;
 }
 
 export const SELECTION_COLOR = "#ff4d1c";
+
+/** Tahrirlanadigan matn ko'rsatkichi: nozik shtrix ramka (har qanday fonda ko'rinadi). */
+export function drawOutline(ctx: CanvasRenderingContext2D, rect: Rect, rotation: number, unit: number, strong = false): void {
+  const pad = 4 * unit;
+  const r = { x: rect.x - pad, y: rect.y - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
+  ctx.save();
+  applyRotation(ctx, r, rotation);
+  ctx.lineWidth = (strong ? 2 : 1.5) * unit;
+  ctx.setLineDash([5 * unit, 4 * unit]);
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
+  ctx.strokeRect(r.x, r.y, r.width, r.height);
+  ctx.lineDashOffset = 4.5 * unit;
+  ctx.strokeStyle = strong ? SELECTION_COLOR : "rgba(255, 255, 255, 0.9)";
+  ctx.strokeRect(r.x, r.y, r.width, r.height);
+  ctx.restore();
+}
 
 /** Tanlangan qatlam ramkasi va tutqichlari. `unit` — 1 CSS px necha kanvas px. */
 export function drawSelection(ctx: CanvasRenderingContext2D, layer: EditorLayer, width: number, height: number, unit: number, handleRadiusCss = 7): void {

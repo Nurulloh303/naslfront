@@ -5,18 +5,26 @@ import type { GenerationJob, GenerationLayer, GenerationSettings, GenerationText
 type StartResponse = { job: GenerationJob; balance: number; idempotentReplay: boolean };
 export type CancelResponse = { job: GenerationJob; balance: number; refunded: number; delivered: number };
 export type SeparateLayersOptions = {
-  numLayers?: number;
+  /** Keshni e'tiborsiz qoldirib, matnlarni qayta aniqlash. */
   force?: boolean;
+  /** Mahsulot/fon kabi rastr qatlamlarni ham ajratish (ixtiyoriy). */
+  separateObjects?: boolean;
 };
+/** Magic Layers v3 javobi (API kontrakti). */
 export type SeparateLayersResponse = {
-  ok: boolean;
-  variant: number;
+  /** Asl rasm — muharrirda o'zgarmaydigan asos. */
+  baseUrl: string;
+  /** Matnsiz toza fon. null — tayyorlab bo'lmadi. */
+  cleanUrl: string | null;
+  width: number;
+  height: number;
+  textLayers: GenerationTextLayer[];
+  /** Ixtiyoriy rastr qatlamlar (odatda bo'sh). */
   layers: GenerationLayer[];
-  /** Tahrirlanadigan matn qatlamlari (layersVersion 2). */
-  textLayers?: GenerationTextLayer[];
-  /** Matn rastr qatlamlardan olib tashlanganmi. */
-  textRemoved?: boolean;
-  layersVersion?: number;
+  textRemoved: boolean;
+  layersVersion: number;
+  ok?: boolean;
+  variant?: number;
   job?: GenerationJob;
 };
 
@@ -98,8 +106,8 @@ export function createP0Api(): CreateApi {
         {
           method: "POST",
           body: JSON.stringify({
-            numLayers: options.numLayers ?? 4,
             force: options.force ?? false,
+            ...(options.separateObjects !== undefined ? { separateObjects: options.separateObjects } : {}),
           }),
         },
       );
