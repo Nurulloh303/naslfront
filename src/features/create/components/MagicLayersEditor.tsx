@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import type { GenerationElement, GenerationTextLayer } from "../domain/types";
 import { useLanguage } from "../../../i18n/LanguageContext";
 import { downloadBlob } from "../../../app/downloadHelper";
@@ -1012,7 +1013,17 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
 
   const stopCompare = () => setComparing(false);
 
-  return (
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  // Portal: muharrir sayt menyusi va boshqa "position:fixed"/transform'li
+  // ota-elementlar ichida qolib, yuqori qatori (Saqlash, Yuklab olish,
+  // Orqaga) menyu tagida yashirinib qolmasligi uchun to'g'ridan-to'g'ri
+  // <body> ga chiqariladi.
+  return createPortal(
     <div className="magic-layers-backdrop" role="dialog" aria-modal="true" aria-labelledby="magic-editor-title">
       <header className="magic-layers-header">
         <div className="magic-header-left">
@@ -1244,5 +1255,5 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
         <DownloadReadySheet blob={downloadSheet.blob} filename={downloadSheet.filename} onClose={() => setDownloadSheet(null)} />
       ) : null}
     </div>
-  );
+  , document.body);
 }
