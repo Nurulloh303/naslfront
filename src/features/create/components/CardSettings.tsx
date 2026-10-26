@@ -8,7 +8,7 @@ import { TextPlan } from "./TextPlan";
 import { STYLE_PRESETS } from "../domain/stylePresets";
 import type { SlidePlan } from "../domain/types";
 import { MAX_UPLOAD_BYTES } from "../domain/uploadLimits";
-import { useStyleTemplateSamples } from "../hooks/useStyleTemplateSamples";
+import { isStyleTemplateUrl, loadStyleTemplateDataUrl, useStyleTemplateSamples, type StyleTemplate } from "../hooks/useStyleTemplateSamples";
 import { StyleTemplateGallery } from "./StyleTemplateGallery";
 
 type Props = {
@@ -40,10 +40,17 @@ export function CardSettings({ brief, assets, settings, disabled, advancedOpen, 
   const [referenceError, setReferenceError] = useState("");
   const [promptNotice, setPromptNotice] = useState("");
   const styleSamples = useStyleTemplateSamples();
-  // "Studiya" pastda yo'q edi — 130 shablon orasida bironta studio misoli
+  // "Studiya" pastda yo'q edi — shablonlar orasida bironta studio misoli
   // topilmadi. O'sha o'rniga to'g'ridan-to'g'ri tayyor shablonlar galereyasi:
   // tanlangan rasm shu yerdan ham dizayn referensi sifatida ishlatiladi.
   const [templateGalleryOpen, setTemplateGalleryOpen] = useState(false);
+  const [styleError, setStyleError] = useState("");
+  // Uslub plitkasi bosilganda muqova rasmi yuklanguncha boshqa plitka
+  // bosilishi mumkin — faqat oxirgi bosilgani referens bo'lib qoladi.
+  const presetPickRef = useRef(0);
+  const [pickingPreset, setPickingPreset] = useState("");
+  const templateReferenceUrl = isStyleTemplateUrl(settings.designReferenceUrl) ? settings.designReferenceUrl : "";
+  const customReference = Boolean(settings.designReferenceUrl) && !templateReferenceUrl;
   useEffect(() => {
     if (!promptNotice) return;
     const timer = window.setTimeout(() => setPromptNotice(""), 3_000);
@@ -90,6 +97,49 @@ export function CardSettings({ brief, assets, settings, disabled, advancedOpen, 
     if (settings.designReferenceUrl.startsWith("blob:")) URL.revokeObjectURL(settings.designReferenceUrl);
     onSettingsChange({ designReferenceUrl: "", designReferenceName: "", designReferenceDataUrl: "" });
     setReferenceError("");
+  };
+
+  const revokeBlobReference = () => {
+    if (settings.designReferenceUrl.startsWith("blob:")) URL.revokeObjectURL(settings.designReferenceUrl);
+  };
+  /* Avto — uslub ham, shablon referensi ham olib tashlanadi. */
+  const pickAuto = () => {
+    presetPickRef.current += 1;
+    setPickingPreset("");
+    setStyleError("");
+    onSettingsChange({ stylePreset: "", ...(templateReferenceUrl ? { designReferenceUrl: "", designReferenceName: "", designReferenceDataUrl: "" } : {}) });
+  };
+  /* Uslub plitkasi = shu uslubning muqova kartasi. Uslub darhol tanlanadi,
+     rasm esa galereyadagi kabi fetch → prepareImageDataUrl yo'li bilan
+     dizayn referensiga qo'yiladi — generatsiya aynan shu dizaynni ko'chiradi.
+     Manifest yuklanmagan bo'lsa (cover yo'q) — faqat uslub, eskicha. */
+  const pickPreset = async (presetId: string, cover: StyleTemplate | undefined) => {
+    const token = ++presetPickRef.current;
+    setStyleError("");
+    if (!cover) {
+      onSettingsChange({ stylePreset: presetId, ...(templateReferenceUrl ? { designReferenceUrl: "", designReferenceName: "", designReferenceDataUrl: "" } : {}) });
+      return;
+    }
+    if (settings.stylePreset === presetId && templateReferenceUrl === cover.url) return;
+    // Boshqa uslubdagi eski shablon referensi yangi uslubga aralashmasin.
+    onSettingsChange({ stylePreset: presetId, ...(templateReferenceUrl ? { designReferenceUrl: "", designReferenceName: "", designReferenceDataUrl: "" } : {}) });
+    setPickingPreset(presetId);
+    try {
+      const dataUrl = await loadStyleTemplateDataUrl(cover);
+      if (token !== presetPickRef.current) return;
+      revokeBlobReference();
+      onSettingsChange({
+        stylePreset: presetId,
+        designReferenceUrl: cover.url,
+        designReferenceName: `${t("settings.copyStyle.templateGallery.namePrefix")} — ${t(`settings.styles.${presetId}`)}`,
+        designReferenceDataUrl: dataUrl,
+      });
+    } catch {
+      if (token !== presetPickRef.current) return;
+      setStyleError(t("settings.styles.coverFailed"));
+    } finally {
+      if (token === presetPickRef.current) setPickingPreset("");
+    }
   };
 
   const baseAsset = assets.find((asset) => asset.isPrimary) ?? assets[0];
@@ -139,34 +189,45 @@ export function CardSettings({ brief, assets, settings, disabled, advancedOpen, 
       {promptNotice && <small className="prompt-notice" role="status">{promptNotice}</small>}
     </label>
 
-    {/* Галерея стилей. Показывается, только пока не загружен свой
+    {/* Галерея стилей. Скрыта, только если продавец загрузил СВОЙ
         референс: два источника оформления противоречили бы друг другу,
-        и сервер в этом случае всё равно слушает референс. */}
-    {!settings.designReferenceUrl && <section className="style-gallery">
+        и сервер в этом случае всё равно слушает референс. Шаблон из
+        галереи (или обложка стиля) — это тоже референс, но выбранный
+        здесь же, поэтому плитки остаются видны. */}
+    {!customReference && <section className="style-gallery">
       <p>{t("settings.styles.legend")}<Hint text={t("hints.stylePreset")} label={t("hints.aria")} /></p>
+      {Object.keys(styleSamples).length > 0 && <small className="style-gallery-hint">{t("settings.styles.pickHint")}</small>}
       <div className="style-grid">
         <button
           type="button"
           className={`style-tile ${settings.stylePreset === "" ? "is-active" : ""}`}
           disabled={disabled}
           aria-pressed={settings.stylePreset === ""}
-          onClick={() => onSettingsChange({ stylePreset: "" })}
+          onClick={pickAuto}
         >
           <span className="style-swatch is-auto">✦</span>
           <small>{t("settings.styles.auto")}</small>
         </button>
         {STYLE_PRESETS.map((preset) => {
-          const sample = styleSamples[preset.id];
+          const cover = styleSamples[preset.id];
+          const active = settings.stylePreset === preset.id;
+          // Shablonlardan shu uslubdagi boshqa karta tanlangan bo'lsa —
+          // plitkada o'sha rasm ko'rinadi, muqova emas.
+          const shownImage = active && templateReferenceUrl ? templateReferenceUrl : cover?.thumb;
+          const hasReference = active && Boolean(templateReferenceUrl);
           return <button
             key={preset.id}
             type="button"
-            className={`style-tile ${settings.stylePreset === preset.id ? "is-active" : ""}`}
+            className={`style-tile ${active ? "is-active" : ""}`}
             disabled={disabled}
-            aria-pressed={settings.stylePreset === preset.id}
-            onClick={() => onSettingsChange({ stylePreset: preset.id })}
+            aria-pressed={active}
+            aria-busy={pickingPreset === preset.id}
+            onClick={() => void pickPreset(preset.id, cover)}
           >
-            {sample ? <span className="style-swatch has-photo" style={{ backgroundImage: `url("${sample}")` }}>
-              <em>{t("settings.styles.sampleBadge")}</em>
+            {shownImage ? <span className="style-swatch has-photo">
+              <img src={shownImage} alt="" loading="lazy" decoding="async" />
+              {hasReference ? <span className="style-check" aria-hidden="true">✓</span> : null}
+              {pickingPreset === preset.id ? <span className="template-gallery-tile-spinner" aria-hidden="true" /> : null}
             </span> : <span
               className="style-swatch"
               style={{ background: `linear-gradient(135deg, ${preset.palette[0]} 0 55%, ${preset.palette[2]} 55% 100%)` }}
@@ -191,12 +252,18 @@ export function CardSettings({ brief, assets, settings, disabled, advancedOpen, 
         disabled={disabled}
         open={templateGalleryOpen}
         onOpenChange={setTemplateGalleryOpen}
-        onSelect={({ url, name, dataUrl }) => {
-          if (settings.designReferenceUrl.startsWith("blob:")) URL.revokeObjectURL(settings.designReferenceUrl);
-          onSettingsChange({ designReferenceUrl: url, designReferenceName: name, designReferenceDataUrl: dataUrl });
+        selectedUrl={templateReferenceUrl}
+        onSelect={({ url, name, dataUrl, category }) => {
+          presetPickRef.current += 1;
+          setPickingPreset("");
+          setStyleError("");
+          revokeBlobReference();
+          const stylePreset = STYLE_PRESETS.some((preset) => preset.id === category) ? category : settings.stylePreset;
+          onSettingsChange({ stylePreset, designReferenceUrl: url, designReferenceName: name, designReferenceDataUrl: dataUrl });
           setTemplateGalleryOpen(false);
         }}
       />}
+      {styleError && <small className="field-error" role="alert">{styleError}</small>}
     </section>}
 
     {/* План текста стоит сразу после блока преимуществ: человек написал

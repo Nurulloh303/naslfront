@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAccount } from "../account/AccountContext";
-import { accountApi, type AdminGeneration, type AdminOrder, type AdminOverview, type AdminPromo, type AdminUser } from "../account/accountApi";
+import { accountApi, type AdminGeneration, type AdminOrder, type AdminOverview, type AdminPromo, type AdminTariff, type AdminUser } from "../account/accountApi";
 import { CabinetFooter, CabinetHeader } from "../cabinet/CabinetHeader";
 import type { CabinetRoute } from "../routes";
 
@@ -25,6 +25,55 @@ const TABS: Array<{ id: Tab; label: string }> = [
 
 const nf = (value: number) => value.toLocaleString("ru-RU").replace(/,/g, " ");
 const shortDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
+
+/**
+ * Встроенная таблица тарифов — на случай, если /api/admin/tariffs недоступен
+ * (старый сервер). Источник правды — billing/pricing.py: TARIFFS.
+ * 1 картинка = 1 токен.
+ */
+const FALLBACK_TARIFFS: AdminTariff[] = [
+  { id: "start", name: "Start", priceUzs: 89_000, images: 21, tokens: 21 },
+  { id: "standart", name: "Standart", priceUzs: 199_000, images: 52, tokens: 52 },
+  { id: "profi", name: "Profi", priceUzs: 399_000, images: 117, tokens: 117 },
+  { id: "maksimum", name: "Maksimum", priceUzs: 599_000, images: 195, tokens: 195 },
+];
+
+const CUSTOM = "custom";
+const tokens = (n: number) => `${n} ${plural(n, "токен", "токена", "токенов")}`;
+
+function useTariffs(): AdminTariff[] {
+  const [tariffs, setTariffs] = useState<AdminTariff[]>(FALLBACK_TARIFFS);
+  useEffect(() => {
+    let alive = true;
+    accountApi.admin.tariffs()
+      .then((result) => { if (alive && result.tariffs?.length) setTariffs(result.tariffs); })
+      .catch(() => { /* остаёмся на встроенной таблице */ });
+    return () => { alive = false; };
+  }, []);
+  return tariffs;
+}
+
+/** «Свободно» + кнопка на каждый тариф. Выбор тарифа фиксирует количество токенов. */
+function TariffPicker({ tariffs, value, onChange, legend, freeHint }: { tariffs: AdminTariff[]; value: string; onChange: (id: string) => void; legend: string; freeHint: string }) {
+  return <fieldset className="admin-tariffs">
+    <legend>{legend}</legend>
+    <div className="admin-tariff-options">
+      <button type="button" aria-pressed={value === CUSTOM} onClick={() => onChange(CUSTOM)}>
+        <b>Свободно</b><span>{freeHint}</span>
+      </button>
+      {tariffs.map((tariff) => <button key={tariff.id} type="button" aria-pressed={value === tariff.id} onClick={() => onChange(tariff.id)}>
+        <b>{tariff.name}</b><span>{nf(tariff.priceUzs)} сум · {tariff.images} {plural(tariff.images, "картинка", "картинки", "картинок")}</span>
+      </button>)}
+    </div>
+  </fieldset>;
+}
+
+function plural(n: number, one: string, few: string, many: string) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
 
 export function AdminPage({ onNavigate, onLogout }: { onNavigate: (route: CabinetRoute) => void; onLogout?: () => void }) {
   const { account } = useAccount();
@@ -84,6 +133,12 @@ function useLoader<T>(load: () => Promise<T>, onError: (message: string) => void
   return { data, busy, reload: run };
 }
 
+function tariffCodes(byTariff?: Record<string, number>) {
+  if (!byTariff) return "";
+  const n = Object.entries(byTariff).reduce((sum, [id, count]) => id === CUSTOM ? sum : sum + count, 0);
+  return n ? ` · по тарифам: ${n}` : "";
+}
+
 function OverviewTab({ onError }: { onError: (message: string) => void }) {
   const { data, busy } = useLoader<AdminOverview>(() => accountApi.admin.overview(), onError);
   if (busy || !data) return <p className="admin-loading">Загружаю…</p>;
@@ -94,7 +149,7 @@ function OverviewTab({ onError }: { onError: (message: string) => void }) {
     { label: "Токенов на руках", value: nf(data.tokens.inCirculation), hint: `Списано: ${nf(data.tokens.spent)}` },
     { label: "Генераций всего", value: nf(data.jobs.total), hint: `За сутки: ${data.jobs.lastDay}` },
     { label: "Неудачных", value: nf(data.jobs.failed), hint: data.jobs.total ? `${Math.round(100 * data.jobs.failed / data.jobs.total)}% от всех` : "—" },
-    { label: "Промокодов", value: nf(data.promos.total), hint: `Активаций: ${data.promos.redemptions}` },
+    { label: "Промокодов", value: nf(data.promos.total), hint: `Активаций: ${data.promos.redemptions}${tariffCodes(data.promos.byTariff)}` },
   ];
 
   return <>
@@ -126,19 +181,31 @@ function UsersTab({ onError }: { onError: (message: string) => void }) {
 
   useEffect(() => { load(""); }, [load]);
 
-  const adjust = async (user: AdminUser) => {
-    const raw = window.prompt(`Сколько токенов начислить ${user.email}? Отрицательное число — списать.`, "10");
-    if (raw === null) return;
-    const amount = Number(raw);
-    if (!Number.isFinite(amount) || amount === 0) { onError("Введите число, не равное нулю"); return; }
-    const reason = window.prompt("Причина (попадёт в историю операций пользователя)", "Начисление администратором") ?? "";
+  const tariffs = useTariffs();
+  const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [adjust, setAdjust] = useState({ tariff: CUSTOM, amount: "10", reason: "" });
+  const [saving, setSaving] = useState(false);
+  const adjustTariff = tariffs.find((item) => item.id === adjust.tariff) ?? null;
+
+  const openEditor = (user: AdminUser) => {
+    setEditing(user);
+    setAdjust({ tariff: CUSTOM, amount: "10", reason: "" });
+  };
+
+  const apply = async () => {
+    if (!editing) return;
+    const amount = adjustTariff ? adjustTariff.tokens : Number(adjust.amount);
+    if (!adjustTariff && (!Number.isFinite(amount) || amount === 0)) { onError("Введите число, не равное нулю"); return; }
+    setSaving(true);
     try {
-      const result = await accountApi.admin.setBalance(user.id, amount, reason);
-      setUsers((current) => current.map((item) => item.id === user.id ? { ...item, balance: result.balance } : item));
+      // По тарифу сервер сам берёт сумму из тарифа и пишет «Tarif: <имя>» в историю.
+      const result = await accountApi.admin.setBalance(editing.id, amount, adjust.reason.trim(), adjustTariff?.id);
+      setUsers((current) => current.map((item) => item.id === editing.id ? { ...item, balance: result.balance } : item));
+      setEditing(null);
       onError("");
     } catch (reason_) {
       onError(reason_ instanceof Error ? reason_.message : "Не удалось изменить баланс");
-    }
+    } finally { setSaving(false); }
   };
 
   return <section className="cabinet-panel">
@@ -146,6 +213,22 @@ function UsersTab({ onError }: { onError: (message: string) => void }) {
       <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по почте или имени" />
       <button type="button" className="button secondary" onClick={() => load(query)}>Найти</button>
     </div>
+    {editing && <div className="admin-balance-editor">
+      <h3>Баланс: {editing.email} <small>сейчас {editing.balance}</small></h3>
+      <TariffPicker tariffs={tariffs} value={adjust.tariff} onChange={(tariff) => setAdjust({ ...adjust, tariff })} legend="Начислить по тарифу (необязательно)" freeHint="ввожу сумму сам" />
+      <div className="admin-form-grid">
+        <label>{adjustTariff ? "Начислить" : "Сколько токенов (минус — списать)"}
+          {adjustTariff
+            ? <input value={tokens(adjustTariff.tokens)} readOnly disabled title="Количество задано тарифом" />
+            : <input type="number" value={adjust.amount} onChange={(event) => setAdjust({ ...adjust, amount: event.target.value })} />}
+        </label>
+        <label>Причина (видна в истории)<input value={adjust.reason} onChange={(event) => setAdjust({ ...adjust, reason: event.target.value })} placeholder={adjustTariff ? `Tarif: ${adjustTariff.name}` : "Начисление администратором"} maxLength={80} /></label>
+      </div>
+      <div className="admin-actions">
+        <button type="button" className="button primary" disabled={saving} onClick={() => void apply()}>{saving ? "Сохраняю…" : adjustTariff ? `Начислить ${tokens(adjustTariff.tokens)}` : "Применить"}</button>
+        <button type="button" className="button secondary" onClick={() => setEditing(null)}>Отмена</button>
+      </div>
+    </div>}
     {busy ? <p className="admin-loading">Загружаю…</p> : <div className="admin-table-wrap"><table className="admin-table">
       <thead><tr><th>Почта</th><th>Имя</th><th>Вход</th><th>Баланс</th><th>Генераций</th><th /></tr></thead>
       <tbody>
@@ -155,7 +238,7 @@ function UsersTab({ onError }: { onError: (message: string) => void }) {
           <td>{user.providers.length ? user.providers.join(", ") : "email"}</td>
           <td><b>{user.balance}</b></td>
           <td>{user.jobs}</td>
-          <td><button type="button" className="textbtn" onClick={() => void adjust(user)}>Изменить баланс</button></td>
+          <td><button type="button" className="textbtn" onClick={() => openEditor(user)}>Изменить баланс</button></td>
         </tr>)}
         {!users.length && <tr><td colSpan={6}>Никого не нашлось.</td></tr>}
       </tbody>
@@ -165,21 +248,39 @@ function UsersTab({ onError }: { onError: (message: string) => void }) {
 
 function PromosTab({ onError }: { onError: (message: string) => void }) {
   const { data, busy, reload } = useLoader<{ promos: AdminPromo[] }>(() => accountApi.admin.promos(), onError);
-  const [form, setForm] = useState({ code: "", kind: "tokens", value: "10", maxUses: "0", owner: "", expiresAt: "" });
+  const tariffs = useTariffs();
+  const emptyForm = { tariff: CUSTOM, code: "", kind: "tokens", value: "10", maxUses: "0", owner: "", expiresAt: "" };
+  const [form, setForm] = useState(emptyForm);
+  // Значения «свободного» режима, чтобы вернуть их при выходе из тарифа.
+  const [freeValues, setFreeValues] = useState({ kind: "tokens", value: "10" });
   const [saving, setSaving] = useState(false);
+  const formTariff = tariffs.find((item) => item.id === form.tariff) ?? null;
+
+  const pickTariff = (id: string) => {
+    const tariff = tariffs.find((item) => item.id === id);
+    if (tariff) {
+      if (!formTariff) setFreeValues({ kind: form.kind, value: form.value });
+      setForm({ ...form, tariff: id, kind: "tokens", value: String(tariff.tokens) });
+    } else {
+      setForm({ ...form, tariff: CUSTOM, ...freeValues });
+    }
+  };
 
   const create = async () => {
     setSaving(true);
     try {
       await accountApi.admin.createPromo({
         code: form.code,
-        kind: form.kind,
-        value: Number(form.value),
+        // По тарифу сервер сам ставит kind=tokens и value из тарифа.
+        tariff: formTariff ? formTariff.id : CUSTOM,
+        kind: formTariff ? "tokens" : form.kind,
+        value: formTariff ? formTariff.tokens : Number(form.value),
         maxUses: Number(form.maxUses),
         owner: form.owner,
         expiresAt: form.expiresAt || undefined,
       });
-      setForm({ code: "", kind: "tokens", value: "10", maxUses: "0", owner: "", expiresAt: "" });
+      setForm(emptyForm);
+      setFreeValues({ kind: "tokens", value: "10" });
       reload();
       onError("");
     } catch (reason) {
@@ -205,15 +306,21 @@ function PromosTab({ onError }: { onError: (message: string) => void }) {
     <section className="cabinet-panel admin-promo-form">
       <h3>Новый промокод</h3>
       <p className="admin-hint">Для блогера удобно ставить его имя в код и в поле «Кому выдан» — потом в таблице видно, кто сколько привёл.</p>
+      <TariffPicker tariffs={tariffs} value={form.tariff} onChange={pickTariff} legend="Тариф" freeHint="ввожу сам: любая сумма" />
+      {formTariff && <p className="admin-hint">Код даст {tokens(formTariff.tokens)} — как тариф {formTariff.name} ({nf(formTariff.priceUzs)} сум). Название кода — любое.</p>}
       <div className="admin-form-grid">
         <label>Код<input value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value.toUpperCase() })} placeholder="DILBAR10" maxLength={24} /></label>
         <label>Что даёт
-          <select value={form.kind} onChange={(event) => setForm({ ...form, kind: event.target.value })}>
+          <select value={form.kind} disabled={!!formTariff} onChange={(event) => setForm({ ...form, kind: event.target.value })}>
             <option value="tokens">Токены на счёт</option>
             <option value="discount">Скидку на покупку, %</option>
           </select>
         </label>
-        <label>{form.kind === "tokens" ? "Сколько токенов" : "Скидка, %"}<input type="number" min={1} value={form.value} onChange={(event) => setForm({ ...form, value: event.target.value })} /></label>
+        <label>{form.kind === "tokens" ? "Сколько токенов" : "Скидка, %"}
+          {formTariff
+            ? <input value={tokens(formTariff.tokens)} readOnly disabled title="Количество задано тарифом" />
+            : <input type="number" min={1} value={form.value} onChange={(event) => setForm({ ...form, value: event.target.value })} />}
+        </label>
         <label>Лимит активаций<input type="number" min={0} value={form.maxUses} onChange={(event) => setForm({ ...form, maxUses: event.target.value })} placeholder="0 — без лимита" /></label>
         <label>Кому выдан<input value={form.owner} onChange={(event) => setForm({ ...form, owner: event.target.value })} placeholder="@blogger" maxLength={80} /></label>
         <label>Действует до<input type="date" value={form.expiresAt} onChange={(event) => setForm({ ...form, expiresAt: event.target.value })} /></label>
@@ -227,7 +334,7 @@ function PromosTab({ onError }: { onError: (message: string) => void }) {
         <thead><tr><th>Код</th><th>Что даёт</th><th>Активаций</th><th>Кому</th><th>До</th><th>Статус</th><th /></tr></thead>
         <tbody>
           {data.promos.map((promo) => <tr key={promo.code} className={promo.active ? "" : "is-off"}>
-            <td><b>{promo.code}</b></td>
+            <td><b>{promo.code}</b>{promo.tariff ? <span className="admin-badge" title="Создан по тарифу">{promo.tariffName || promo.tariff}</span> : null}</td>
             <td>{promo.kind === "tokens" ? `${promo.value} токенов` : `−${promo.value}%`}</td>
             <td>{promo.used}{promo.maxUses ? ` / ${promo.maxUses}` : ""}</td>
             <td>{promo.owner || "—"}</td>

@@ -2203,6 +2203,7 @@ small.field-error { padding: 6px 10px; font-size: 13px; }
   display: flex; align-items: center; margin: 0;
   color: var(--text-primary); font-size: 11px; line-height: 14px; font-weight: 650;
 }
+.style-gallery-hint { margin-top: -4px; color: var(--text-secondary); font-size: 11px; line-height: 14px; }
 .style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; }
 .style-tile {
   display: grid; gap: 5px; justify-items: center;
@@ -2237,7 +2238,19 @@ small.field-error { padding: 6px 10px; font-size: 13px; }
 /* Реальный пример вместо абстрактного градиента — виднее, что реально
    получится. Подпись "Misol" не даёт подумать, что это готовый результат
    именно ЕГО товара: карточка ещё не сгенерирована. */
-.style-swatch.has-photo { background-size: cover; background-position: center; }
+.style-swatch.has-photo { background-size: cover; background-position: center; background-color: var(--surface-control); }
+/* Плитка стиля = обложка-карточка этого стиля (3:4), а не цветовой градиент. */
+.style-swatch.has-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.style-tile[aria-busy="true"] .style-swatch img { opacity: .55; }
+.style-tile.is-active .style-swatch { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* Галочка: эта картинка ушла в генерацию как дизайн-референс. */
+.style-check {
+  position: absolute; right: 4px; top: 4px; width: 18px; height: 18px;
+  display: grid; place-items: center; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink, #fff);
+  font-size: 11px; font-weight: 800; line-height: 1; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.template-gallery-tile.is-selected { border-color: var(--accent); }
 .style-swatch.has-photo em {
   position: absolute; left: 4px; bottom: 4px; padding: 2px 6px; border-radius: 999px;
   background: rgba(0,0,0,.55); color: #fff; font-size: 8px; font-weight: 650; font-style: normal;
@@ -2647,3 +2660,19 @@ small.field-error { padding: 6px 10px; font-size: 13px; }
 .batch-chip.is-done { background:rgba(60,180,110,.18); color:#3cb46e; }
 .batch-chip.is-failed { background:rgba(255,92,46,.18); color:var(--accent); }
 .batch-chip.is-generating, .batch-chip.is-analyzing { background:rgba(255,202,92,.18); color:#e0a83a; }
+
+/* Выбор тарифа в админке (промокод и начисление баланса). */
+.admin-tariffs { min-width: 0; margin: 14px 0 0; padding: 0; border: 0; }
+.admin-tariffs legend { margin-bottom: 8px; color: var(--text-secondary); font-size: 13px; }
+.admin-tariff-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.admin-tariff-options button { display: grid; align-content: center; gap: 2px; min-height: 52px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface-card); color: var(--text-primary); text-align: left; cursor: pointer; }
+.admin-tariff-options button b { font-size: 14px; }
+.admin-tariff-options button span { color: var(--text-secondary); font-size: 12px; line-height: 16px; }
+.admin-tariff-options button[aria-pressed="true"] { border-color: transparent; background: var(--selected-bg); color: var(--selected-ink); }
+.admin-tariff-options button[aria-pressed="true"] span { color: inherit; opacity: .75; }
+.admin-form-grid input:disabled, .admin-form-grid select:disabled { opacity: .7; cursor: not-allowed; }
+.admin-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--accent-wash); color: var(--text-primary); font-size: 11px; font-weight: 600; vertical-align: middle; }
+.admin-balance-editor { margin-bottom: 16px; padding: 16px; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--surface-elevated); }
+.admin-balance-editor h3 { margin: 0; font-size: 16px; }
+.admin-balance-editor h3 small { margin-left: 8px; color: var(--text-secondary); font-weight: 500; }
+.admin-actions { display: flex; flex-wrap: wrap; gap: 10px; }

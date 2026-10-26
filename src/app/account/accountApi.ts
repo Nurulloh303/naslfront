@@ -157,12 +157,14 @@ export type AdminOverview = {
   users: { total: number; withGoogle: number; withTelegram: number; withBalance: number };
   tokens: { inCirculation: number; spent: number };
   jobs: { total: number; lastDay: number; failed: number };
-  promos: { total: number; active: number; redemptions: number };
+  promos: { total: number; active: number; redemptions: number; byTariff?: Record<string, number> };
   orders: number;
   costs: { perImageUzs: number; tokenPriceUzs: number };
 };
 export type AdminUser = { id: string; email: string; name: string; balance: number; providers: string[]; jobs: number; orders: number; supportCode: string };
-export type AdminPromo = { code: string; kind: string; value: number; used: number; maxUses: number; active: boolean; owner: string; note: string; expiresAt: string | null; createdAt: string; lastUsedAt: string | null };
+export type AdminPromo = { code: string; kind: string; value: number; used: number; maxUses: number; active: boolean; owner: string; note: string; expiresAt: string | null; createdAt: string; lastUsedAt: string | null; tariff?: string; tariffName?: string };
+/** Tarif: admin shu tarif bo'yicha token beradi (promokod yoki to'g'ridan-to'g'ri). */
+export type AdminTariff = { id: string; name: string; priceUzs: number; images: number; tokens: number };
 export type AdminGeneration = { id: string; email: string; status: string; tokens: number; title: string; contentType: string; createdAt: string; error: string | null };
 export type AdminOrder = { id: string; email: string; tokens: number; priceUzs: number; status: string; provider: string; createdAt: string };
 
@@ -186,7 +188,9 @@ export const accountApi = {
   admin: {
     overview: () => request<AdminOverview>("/api/admin/overview"),
     users: (q = "") => request<{ users: AdminUser[]; total: number }>(`/api/admin/users?q=${encodeURIComponent(q)}`),
-    setBalance: (id: string, amount: number, reason: string) => request<{ ok: boolean; balance: number; applied: number }>(`/api/admin/users/${encodeURIComponent(id)}/balance`, { method: "POST", body: JSON.stringify({ amount, reason }) }),
+    // tariff berilsa, server miqdorni tarifdan oladi va amount'ni e'tiborsiz qoldiradi.
+    setBalance: (id: string, amount: number, reason: string, tariff?: string) => request<{ ok: boolean; balance: number; applied: number }>(`/api/admin/users/${encodeURIComponent(id)}/balance`, { method: "POST", body: JSON.stringify(tariff ? { tariff, amount, reason } : { amount, reason }) }),
+    tariffs: () => request<{ tariffs: AdminTariff[] }>("/api/admin/tariffs"),
     promos: () => request<{ promos: AdminPromo[] }>("/api/admin/promos"),
     createPromo: (input: Record<string, unknown>) => request<{ promo: AdminPromo }>("/api/admin/promos", { method: "POST", body: JSON.stringify(input) }),
     updatePromo: (code: string, patch: Record<string, unknown>) => request<{ promo: AdminPromo }>(`/api/admin/promos/${encodeURIComponent(code)}`, { method: "PATCH", body: JSON.stringify(patch) }),
