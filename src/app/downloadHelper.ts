@@ -109,22 +109,62 @@ export async function downloadBlob(blob: Blob, filename: string): Promise<Downlo
 }
 
 /**
- * Cross-origin xavfsiz fayl yuklab olish.
+ * Server rasmining yuklab olinadigan manzili.
  *
- * Brauzerlar 'download' atributini cross-origin URL'lar (masalan: api.naslai.uz)
- * uchun e'tiborsiz qoldirib, yangi tabda yoki joriy oynada ochib yuboradi.
- * Ushbu funksiya faylni blob qilib oladi va brauzer orqali haqiqiy fayl sifatida yuklab beradi.
+ * nginx `/media/` ni CORS sarlavhasisiz beradi: brauzer faylni blob qilib
+ * ololmaydi va `download` atributini e'tiborsiz qoldirib, rasmni yangi oynada
+ * ochib qo'yadi. Natija fayllari esa `/api/files/` orqali ham beriladi (Django,
+ * CORS bilan). `/media/generated/...` → `/api/files/generated/...`.
+ */
+export function toApiFileUrl(url: string): string {
+  const marker = "/media/generated/";
+  const index = url.indexOf(marker);
+  if (index === -1) return url;
+  return `${url.slice(0, index)}/api/files/generated/${url.slice(index + marker.length).split("?")[0]}`;
+}
+
+function withDownloadFlag(url: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}download=1`;
+}
+
+/** Server `Content-Disposition: attachment` beradi — brauzer sahifadan chiqmay faylni saqlaydi. */
+function navigateToAttachment(url: string): void {
+  const link = document.createElement("a");
+  link.href = url;
+  link.rel = "noopener";
+  link.style.display = "none";
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+/**
+ * Server URL'idagi faylni yuklab beradi (kompyuter va telefon).
+ *
+ * 1. `/api/files/` orqali blob qilib olamiz → kompyuterda darhol fayl,
+ *    telefonda tizim "Ulashish" oynasi ("Rasmni saqlash" → galereya).
+ * 2. Bo'lmasa (eski fayl, tarmoq, iOS ulashishni rad etdi) — `?download=1`
+ *    havolasiga o'tamiz: server faylni attachment qilib beradi.
  */
 export async function downloadFile(url: string, defaultFilename = "naslai-karta.png"): Promise<void> {
   if (!url) return;
+  const apiUrl = toApiFileUrl(url);
+  const cleanName = apiUrl.split("?")[0].split("/").pop();
+  const filename = defaultFilename !== "naslai-karta.png" || !cleanName || !cleanName.includes(".")
+    ? defaultFilename
+    : `naslai-${cleanName}`;
   try {
-    const response = await fetch(url, { mode: "cors" });
+    const response = await fetch(apiUrl, { mode: "cors" });
     if (!response.ok) throw new Error("Tarmoq xatosi");
     const blob = await response.blob();
-    const cleanName = url.split("?")[0].split("/").pop();
-    saveBlobAsFile(blob, cleanName && cleanName.includes(".") ? cleanName : defaultFilename);
+    const outcome = await downloadBlob(blob, filename);
+    if (outcome === "needs-gesture") navigateToAttachment(withDownloadFlag(apiUrl));
   } catch {
-    // Agar CORS yoki fetch bloklansa, to'g'ridan-to'g'ri havolani bosish
+    if (apiUrl !== url) {
+      navigateToAttachment(withDownloadFlag(apiUrl));
+      return;
+    }
+    // Boshqa manzil (masalan tashqi CDN) — eski yo'l: yangi oynada ochish.
     const link = document.createElement("a");
     link.href = url;
     link.download = defaultFilename;
