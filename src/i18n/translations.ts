@@ -81,6 +81,7 @@ const uz = {
   },
   magicLayers: {
     button: "Magic Layers",
+    betaBadge: "Beta test sinovida",
     buttonTitle: "Qatlamlarda tahrirlash",
     badge: "AI Qatlamlar",
     modalTitle: "Magic Layers — Qatlamlarda tahrirlash",
@@ -604,6 +605,7 @@ const ru: typeof uz = {
   },
   magicLayers: {
     button: "Magic Layers",
+    betaBadge: "Бета-тестирование",
     buttonTitle: "Редактировать по слоям",
     badge: "AI Слои",
     modalTitle: "Magic Layers — Редактирование по слоям",

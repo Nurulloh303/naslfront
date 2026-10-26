@@ -1032,6 +1032,7 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
             <span className="magic-btn-label">{t("magicLayers.back")}</span>
           </button>
           <span className="magic-brand-badge">✨ {t("magicLayers.badge")}</span>
+          <span className="magic-beta-badge">{t("magicLayers.betaBadge")}</span>
           <div className="magic-header-titles">
             <h2 id="magic-editor-title">
               <span className="magic-title-long">{t("magicLayers.modalTitle")} · </span>{variant}-slayd
