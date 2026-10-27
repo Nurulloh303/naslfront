@@ -17,8 +17,8 @@ import "./GenerationStage.css";
  */
 
 const STEP_AT = [0, 20, 48, 75, 90];
-const CARD_TIPS = ["t1", "t2", "t3", "t4", "t5", "t6"] as const;
-const VIDEO_TIPS = ["t3", "t6", "t7"] as const;
+export const CARD_TIPS = ["t1", "t2", "t3", "t4", "t5", "t6"] as const;
+export const VIDEO_TIPS = ["t3", "t6", "t7"] as const;
 const TIP_MS = 6000;
 const TIP_FADE_MS = 360;
 
@@ -40,14 +40,14 @@ export function stageStepFor(progress: number): number {
   return step;
 }
 
-function stepLabels(t: (path: string) => string, contentType: ContentMode): string[] {
+export function stepLabels(t: (path: string) => string, contentType: ContentMode): string[] {
   const base = ["s1", "s2", "s3", "s4", "s5"].map((key) => t(`results.stage.steps.${key}`));
   if (contentType === "video") return [base[0], t("results.stage.video.s2"), t("results.stage.video.s3"), t("results.stage.video.s4"), base[4]];
   if (contentType === "photo") return [base[0], base[1], base[2], t("results.stage.photoS4"), base[4]];
   return base;
 }
 
-function useRotatingTip(count: number) {
+export function useRotatingTip(count: number) {
   const [index, setIndex] = useState(() => Math.floor(Math.random() * count));
   const [leaving, setLeaving] = useState(false);
   useEffect(() => {
