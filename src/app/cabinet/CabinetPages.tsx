@@ -14,7 +14,7 @@ type Props = { route: Exclude<CabinetRoute, "create">; onNavigate: (route: Cabin
 /* Вкладки профиль-хаба. Роуты остались прежними (billing/history/api/referrals
    продолжают работать и по прямой ссылке), но визуально это одна страница
    «Profil» с переключателем, как в макете. */
-type HubTab = "profile" | "billing" | "history" | "api" | "referrals";
+type HubTab = "profile" | "billing" | "history" | "referrals";
 
 function PageFrame({ route, onNavigate, onLogout, title, children }: Props & { title: string; children: ReactNode }) {
   const { account } = useAccount();
@@ -217,34 +217,6 @@ function HistoryPanel() {
   return <div className="cabinet-list">{entries.map((entry) => <article className="cabinet-row" key={entry.id}><div><b>{entry.label}</b><span>{new Date(entry.createdAt).toLocaleString("uz-UZ")} · {t("cabinet.history.balanceAfter")} {entry.balanceAfter} {t("cabinet.history.token")}</span></div><strong className={entry.type === "credit" ? "amount-positive" : "amount-negative"}>{entry.type === "credit" ? "+" : "−"}{entry.amount} {t("cabinet.history.token")}</strong></article>)}</div>;
 }
 
-function ApiPanel() {
-  const { account, refresh } = useAccount();
-  const { t } = useLanguage();
-  const [secret, setSecret] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [confirmId, setConfirmId] = useState<string | null>(null);
-  if (!account) return null;
-  // Лимит ключей приходит с сервера. Кнопку гасим ЗАРАНЕЕ: раньше её можно
-  // было жать бесконечно, и человек упирался в ошибку только после клика.
-  const keyLimit = account.apiKeyLimit ?? 3;
-  const limitReached = account.apiKeys.length >= keyLimit;
-  const createKey = async () => {
-    if (limitReached) { setError(t("cabinet.api.limitReached", { limit: keyLimit })); return; }
-    setBusy(true); setError("");
-    try { const created = await accountApi.createApiKey(); setSecret(created.secret); await refresh(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Kalitni yaratib bo‘lmadi"); }
-    finally { setBusy(false); }
-  };
-  const revoke = async (id: string) => { setBusy(true); setError(""); try { await accountApi.revokeApiKey(id); setConfirmId(null); setSecret(""); await refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Kalitni bekor qilib bo‘lmadi"); } finally { setBusy(false); } };
-  const copySecret = async () => { try { await navigator.clipboard.writeText(secret); } catch { setError("Maxfiy kalitdan nusxa olib bo‘lmadi"); } };
-  return <>
-    <div className="api-hero"><div><h2>{t("cabinet.api.heroTitle")}</h2><p>{t("cabinet.api.heroText")}</p></div><div className="api-hero-action"><button className="button primary" type="button" disabled={busy || limitReached} onClick={() => void createKey()}>{busy ? t("cabinet.api.creating") : t("cabinet.api.create")}</button><small>{t("cabinet.api.keysUsed", { used: account.apiKeys.length, limit: keyLimit })}</small></div></div>
-    {secret && <div className="secret-once" role="status"><div><b>{t("cabinet.api.secretSaveNow")}</b><code>{secret}</code><small>{t("cabinet.api.secretNote")}</small></div><button className="button secondary" type="button" onClick={() => void copySecret()}>{t("cabinet.api.copy")}</button><button className="button secondary" type="button" onClick={() => setSecret("")}>{t("cabinet.api.done")}</button></div>}
-    {error && <p className="inline-warning" role="alert">{error}</p>}
-    <div className="cabinet-panel"><h2>{t("cabinet.api.keysTitle")}</h2>{account.apiKeys.length ? <div className="cabinet-list">{account.apiKeys.map((key) => <article className="cabinet-row" key={key.id}><div><b>{key.name}</b><code>{key.prefix}••••••••</code></div>{confirmId === key.id ? <div className="inline-confirm"><span>{t("cabinet.api.revokeConfirm")}</span><button className="button danger" type="button" disabled={busy} onClick={() => void revoke(key.id)}>{t("cabinet.api.revokeYes")}</button><button className="button secondary" type="button" onClick={() => setConfirmId(null)}>{t("cabinet.api.cancel")}</button></div> : <button className="button danger" type="button" onClick={() => setConfirmId(key.id)}>{t("cabinet.api.revoke")}</button>}</article>)}</div> : <EmptyState title={t("cabinet.api.emptyTitle")} text={t("cabinet.api.emptyText")} action={t("cabinet.api.create")} onAction={() => void createKey()} />}</div>
-  </>;
-}
 
 function ReferralsPanel() {
   const { account } = useAccount();
@@ -276,7 +248,6 @@ function ProfileHub({ initialTab, onNavigate, onLogout }: { initialTab: HubTab }
     ["profile", t("profileHub.tabProfile")],
     ["billing", t("profileHub.tabTokens")],
     ["history", t("profileHub.tabHistory")],
-    ["api", t("profileHub.tabApi")],
     ["referrals", t("profileHub.tabRef")],
   ];
 
@@ -313,7 +284,6 @@ function ProfileHub({ initialTab, onNavigate, onLogout }: { initialTab: HubTab }
         {tab === "profile" && <div className="two-col"><ProfileFormPanel /><ProjectShortcutsPanel onNavigate={onNavigate} /></div>}
         {tab === "billing" && <TokensPanel />}
         {tab === "history" && <HistoryPanel />}
-        {tab === "api" && <ApiPanel />}
         {tab === "referrals" && <ReferralsPanel />}
       </div>
     </section>
@@ -326,7 +296,8 @@ function ProfileHub({ initialTab, onNavigate, onLogout }: { initialTab: HubTab }
 export function ProfilePage(props: Omit<Props, "route">) { return <ProfileHub initialTab="profile" {...props} />; }
 export function BillingPage(props: Omit<Props, "route">) { return <ProfileHub initialTab="billing" {...props} />; }
 export function HistoryPage(props: Omit<Props, "route">) { return <ProfileHub initialTab="history" {...props} />; }
-export function ApiPage(props: Omit<Props, "route">) { return <ProfileHub initialTab="api" {...props} />; }
+// API kalitlarni endi faqat admin beradi — eski #api havolasi profilga olib boradi.
+export function ApiPage(props: Omit<Props, "route">) { return <ProfileHub initialTab="profile" {...props} />; }
 export function ReferralsPage(props: Omit<Props, "route">) { return <ProfileHub initialTab="referrals" {...props} />; }
 
 /* ---------------- юридические документы ---------------- */
