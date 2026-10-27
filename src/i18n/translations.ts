@@ -407,6 +407,12 @@ const uz = {
         t7: "Harakat tavsifi qisqa va aniq bo‘lsa, video silliqroq chiqadi.",
       },
     },
+    showcase: {
+      label: "Kartangiz yig‘ilmoqda",
+      step: "Bosqich {{n}} / 5",
+      tilt: "📱 Telefonni qiyshaytiring",
+      tiltOn: "Telefonni qiyshaytiring — karta ergashadi",
+    },
     game: {
       modeLabel: "Kutish rejimi", modeGame: "O‘yin", modeProcess: "Jarayon",
       boardLabel: "Mahsulotingizdan boshqotirma", hint: "Ikki bo‘lakni ketma-ket bosing — ular o‘rin almashadi.",
@@ -955,6 +961,12 @@ const ru: typeof uz = {
         t6: "Лучший результат — с чётким фото товара на чистом фоне и при хорошем свете.",
         t7: "Чем короче и конкретнее описание движения, тем плавнее видео.",
       },
+    },
+    showcase: {
+      label: "Собираем вашу карточку",
+      step: "Этап {{n}} / 5",
+      tilt: "📱 Наклоните телефон",
+      tiltOn: "Наклоняйте телефон — карточка повторяет движение",
     },
     game: {
       modeLabel: "Режим ожидания", modeGame: "Игра", modeProcess: "Процесс",

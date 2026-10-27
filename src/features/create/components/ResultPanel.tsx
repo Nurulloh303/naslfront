@@ -1,6 +1,9 @@
 import { useEffect, useId, useState } from "react";
 import { AnalysisProgress } from "./AnalysisProgress";
-import { GameDoneToast, WaitingArea } from "./WaitingGame";
+// Mini o'yin vaqtincha o'chirilgan (variant 6) — qaytarish uchun izohdan chiqaring
+// import { GameDoneToast, WaitingArea } from "./WaitingGame";
+// Variant 4: kutish paytida 3D aylanuvchi vitrina
+import { Showcase3D } from "./Showcase3D";
 import { TextLayerEditor } from "./TextLayerEditor";
 import { MagicLayersEditor, type MagicLayersSource } from "./MagicLayersEditor";
 import { ListingResult } from "./ListingBlocks";
@@ -285,7 +288,9 @@ export function ResultPanel({ job, contentType, hasReference, productImageUrl, s
     <div className="section-heading"><span>03</span><div><h2 id="results-step">{t("results.title")}</h2><p>{t("results.subtitle")}</p></div></div>
     {job.status === "analyzing" ? <AnalysisProgress /> : null}
     {job.status === "idle" || job.status === "ready" ? <div className="empty-result"><div className="result-mark">✦</div><h3>{t("results.emptyTitle", { word: resultWord })}</h3><p>{t("results.emptyHint")}</p></div> : null}
-    {running ? <div className="job-card" aria-busy="true"><WaitingArea progress={smoothProgress} contentType={contentType} imageUrl={productImageUrl} aspectRatio={stageAspectRatio} /><div className="job-top"><span className="pulse-dot"/><b>{displayMessage}</b><span>{smoothProgress}%</span></div><div className="progress"><span style={{ width: `${smoothProgress}%` }} /></div><WaitTimer startMs={job.elapsedMs ?? 0} /><p>{t("results.jobSavedNote")}</p>{onCancel ? <button type="button" className="button ghost job-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? t("results.cancelling") : t("results.cancel")}</button> : null}</div> : null}
+    {running ? <div className="job-card" aria-busy="true">{/* Mini o'yin vaqtincha o'chirilgan (variant 6) — qaytarish uchun izohdan chiqaring:
+      <WaitingArea progress={smoothProgress} contentType={contentType} imageUrl={productImageUrl} aspectRatio={stageAspectRatio} />
+    */}<Showcase3D progress={smoothProgress} contentType={contentType} productImageUrl={productImageUrl} stageAspectRatio={stageAspectRatio} /><div className="job-top"><span className="pulse-dot"/><b>{displayMessage}</b><span>{smoothProgress}%</span></div><div className="progress"><span style={{ width: `${smoothProgress}%` }} /></div><WaitTimer startMs={job.elapsedMs ?? 0} /><p>{t("results.jobSavedNote")}</p>{onCancel ? <button type="button" className="button ghost job-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? t("results.cancelling") : t("results.cancel")}</button> : null}</div> : null}
     {job.status === "failed" ? <div className="error-card"><b>{t("results.failedTitle")}</b><p>{job.error}</p><div className="result-actions"><button type="button" className="button secondary" onClick={onGenerate}>{t("results.retry")}</button><button type="button" className="button secondary" onClick={onEditSettings}>{t("results.editSettings")}</button></div></div> : null}
     {job.regenerateError ? <p className="reference-warning" role="status">{job.regenerateError}</p> : null}
     {job.status === "success" && job.results.length ? <div className="result-variants">{job.results.map((result, index) => <article className={`result-card ${isVideo ? "video-result" : isPhoto ? "photo-result" : ""}`} key={result.id}><img src={result.previewUrl} alt={isVideo ? "Yaratilgan mahsulot videosi prevyusi" : isPhoto ? "Yaratilgan mahsulot fotosi" : "Yaratilgan mahsulot kartasi"} /><div><span className="success-pill">{t("results.readyPill")}</span><h3>{result.title}</h3><p>{result.width}×{result.height} · yuklangan mahsulot asosida yaratildi</p>{hasReference === true && result.referenceUsed === false && <p className="reference-warning">{t("results.referenceDropped")}</p>}{hasReference === true && result.referenceUsed === "partial" && <p className="reference-warning">{t("results.referencePartial")}</p>}<div className="result-quality"><b>{t("results.qualityTitle")}</b><span>86/100</span><small>{t("results.qualityHint")}</small></div><div className="result-actions"><button className="button primary" type="button" onClick={() => onDownload(result.downloadUrl)}>{isVideo ? "Prevyu yuklash" : isPhoto ? "Foto yuklash" : "Kartani yuklash"}</button>{!isVideo && onSeparateLayers && onComposeSlide ? <button type="button" className="magic-layers-trigger-btn" title={t("magicLayers.buttonTitle")} disabled={loadingLayersVariant === index + 1} onClick={() => handleOpenLayers(index + 1)}><span className="sparkle">✨</span>{loadingLayersVariant === index + 1 ? t("magicLayers.loadingBtn") : t("magicLayers.button")}<span className="magic-beta-badge">{t("magicLayers.betaBadge")}</span></button> : null}<button className="button secondary" type="button" onClick={onGenerate}>{t("results.regenerate")}</button><button className="button secondary" type="button" onClick={onNewProject}>{t("results.newProject")}</button></div>{job.textMode === "own" && onComposeSlide && result.slide ? <div className="slide-text-actions">
@@ -310,7 +315,9 @@ export function ResultPanel({ job, contentType, hasReference, productImageUrl, s
       }}
     /> : null}<Rating value={ratings[result.id] ?? null} onRate={(value) => rate(result.id, value)} /></div></article>)}</div> : null}
     {job.status === "success" ? <ListingSection job={job} onRetry={onRetryListing} /> : null}
+    {/* Mini o'yin vaqtincha o'chirilgan (variant 6) — qaytarish uchun izohdan chiqaring:
     {job.status === "success" ? <GameDoneToast /> : null}
+    */}
 
     {/* Magic Layers Editor Modal */}
     {activeMagicVariant !== null && magicSource && onComposeSlide && job.results[activeMagicVariant - 1] && (
