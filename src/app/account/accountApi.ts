@@ -67,7 +67,11 @@ export type AccountApiKey = {
 
 export type TokenPack = {
   id: string;
+  /** Tarif nomi: Start, Standart, Profi, Maksimum. */
+  name?: string;
   tokens: number;
+  /** Shu tarifda nechta rasm yaratish mumkin. */
+  images?: number;
   priceUzs: number;
   popular: boolean;
   perToken: number;

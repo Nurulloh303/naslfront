@@ -1585,6 +1585,8 @@ button:not(:disabled):hover { transition-timing-function: var(--ease); }
 .pack-save { background: var(--accent-wash); color: var(--accent-soft-text); }
 .pack-card.popular .pack-save { top: 40px; }
 .pack-tokens { font-family: var(--font-display); font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -.03em; color: var(--text-primary); }
+.pack-name { font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); }
+.pack-images { font-size: 13px; color: var(--text-secondary); }
 .pack-tokens i { font-style: normal; font-size: .45em; color: var(--text-secondary); font-weight: 600; }
 .pack-price { font-size: 17px; font-weight: 700; color: var(--text-primary); }
 .pack-per { font-size: 12px; color: var(--text-secondary); }

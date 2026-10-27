@@ -303,7 +303,7 @@ const uz = {
   },
   buy: {
     title: "Tokenlar sotib olish", subtitle: "Paketni tanlang — katta paketda token arzonroq.",
-    popular: "Ommabop", perToken: "{{price}} so‘m / token", save: "−{{percent}}%", tokens: "token", sum: "so‘m",
+    popular: "Ommabop", images: "{{count}} ta rasm", perToken: "{{price}} so‘m / token", save: "−{{percent}}%", tokens: "token", sum: "so‘m",
     choose: "Tanlash", selected: "Tanlandi",
     payWith: "To‘lov usuli", pay: "To‘lovga o‘tish", creating: "Buyurtma yaratilmoqda…",
     disabledTitle: "To‘lov hali ulanmagan",
@@ -827,7 +827,7 @@ const ru: typeof uz = {
   },
   buy: {
     title: "Покупка токенов", subtitle: "Выберите пакет — чем больше, тем дешевле токен.",
-    popular: "Популярный", perToken: "{{price}} сум / токен", save: "−{{percent}}%", tokens: "токенов", sum: "сум",
+    popular: "Популярный", images: "{{count}} изображений", perToken: "{{price}} сум / токен", save: "−{{percent}}%", tokens: "токенов", sum: "сум",
     choose: "Выбрать", selected: "Выбрано",
     payWith: "Способ оплаты", pay: "Перейти к оплате", creating: "Создаём заказ…",
     disabledTitle: "Оплата пока не подключена",

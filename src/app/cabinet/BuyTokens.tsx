@@ -139,8 +139,10 @@ export function BuyTokens() {
       >
         {pack.popular && <span className="pack-flag">{t("buy.popular")}</span>}
         {pack.discount > 0 && <span className="pack-save">{t("buy.save", { percent: pack.discount })}</span>}
+        {pack.name && <span className="pack-name">{pack.name}</span>}
         <b className="pack-tokens">{pack.tokens} <i>{t("buy.tokens")}</i></b>
         <span className="pack-price">{formatSum(pack.priceUzs)} {t("buy.sum")}</span>
+        {pack.images ? <span className="pack-images">{t("buy.images", { count: pack.images })}</span> : null}
         <small className="pack-per">{t("buy.perToken", { price: formatSum(pack.perToken) })}</small>
       </button>)}
     </div>
@@ -149,7 +151,7 @@ export function BuyTokens() {
       <div className="buy-total">
         <span>{t("buy.total")}</span>
         <b>{formatSum(selected.priceUzs)} {t("buy.sum")}</b>
-        <small>{selected.tokens} {t("buy.tokens")}</small>
+        <small>{selected.name ? `${selected.name} · ` : ""}{selected.tokens} {t("buy.tokens")}</small>
       </div>
 
       <div className="buy-providers" role="group" aria-label={t("buy.payWith")}>
