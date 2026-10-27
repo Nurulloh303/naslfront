@@ -346,6 +346,8 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
             job={state.job}
             contentType={state.settings.contentType}
             hasReference={Boolean(state.settings.designReferenceDataUrl || state.settings.contentType === "copyStyle")}
+            productImageUrl={(state.assets.find((asset) => asset.isPrimary) ?? state.assets[0])?.url}
+            stageAspectRatio={state.settings.contentType === "video" ? state.settings.aspectRatio : "3:4"}
             onGenerate={startGeneration}
             onDownload={flow.download}
             onEditSettings={() => setActiveStep(2)}

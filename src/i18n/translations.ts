@@ -9,7 +9,7 @@ export const LANGUAGE_STORAGE_KEY = "naslai:ui-lang";
 const uz = {
   common: { brand: "naslai.uz", token: "token" },
   nav: { otherFeatures: "Boshqa imkoniyatlar", batch: "Partiya", createCard: "Karta yaratish", newProject: "Loyiha yaratish", allProjects: "Barcha loyihalar", profileAria: "Foydalanuvchi profili" },
-  profileMenu: { topUp: "Tokenlarni to‘ldirish", profile: "Profil", logout: "Chiqish" },
+  profileMenu: { topUp: "Tokenlarni to‘ldirish", profile: "Profil", logout: "Chiqish", adminPanel: "Admin panel", adminPanelHint: "Promokod, API kalit, tokenlar", djangoAdmin: "Django admin", djangoAdminHint: "Yangi oynada ochiladi" },
   profileHub: { tabProfile: "Profil", tabTokens: "Tokenlar va tariflar", tabHistory: "Tokenlar tarixi", tabApi: "API kabineti", tabRef: "Referalka", tabsAria: "Profil bo‘limlari", backHome: "Bosh sahifaga qaytish", modalTitle: "Balansni to‘ldirish", modalAvailable: "Mavjud balans", modalClose: "Yopish", priceTitle: "Token narxlari", priceNote: "1 token = 1 tayyor rasm. Narx eng kichik paket bo‘yicha; katta paketda token arzonroq.", priceImage: "Har bir tayyor rasm", priceVariant: "Har bir qo‘shimcha variant", pricePage: "Har bir qo‘shimcha sahifa", pricePackage: "Marketplace paketining har bir slaydi ({{min}}–{{max}} ta)", planName: "Starter", planText: "Mahsulot kartalarini sinash va kichik katalog uchun.", planSoon: "Tez kunda", planBuy: "Token sotib olish", planOff: "To‘lov ulanmagan" },
   footer: {
     product: "MAHSULOT", home: "Bosh sahifa", telegramChannel: "Telegram kanal",
@@ -391,6 +391,22 @@ const uz = {
     emptyTitle: "Bu yerda {{word}} paydo bo‘ladi", emptyHint: "Mahsulotni yuklang, ssenariyni sozlang va generatsiyani boshlang.",
     analysisSteps: { s1: "Fotoingiz qabul qilindi", s2: "Rasm sifati tekshirilmoqda", s3: "AI mahsulotni aniqlamoqda", s4: "Afzalliklar va kategoriya tanlanmoqda", s5: "Brief yig‘ilmoqda" },
     analysisNote: "Odatda 5–15 soniya. Sahifani yopmang.",
+    stage: {
+      stepsLabel: "Generatsiya bosqichlari",
+      steps: { s1: "Mahsulot tahlil qilinmoqda", s2: "Kompozitsiya tuzilmoqda", s3: "Ranglar va yorug‘lik", s4: "Matn va belgilar", s5: "Yakuniy silliqlash" },
+      photoS4: "Detallar va soyalar",
+      video: { s2: "Sahna tuzilmoqda", s3: "Harakat chizilmoqda", s4: "Kadrlar yig‘ilmoqda" },
+      tipLabel: "Maslahat",
+      tips: {
+        t1: "Magic Layers bilan kartadagi yozuvlarni keyin tahrirlashingiz mumkin.",
+        t2: "Galereyadan uslub tanlasangiz, dizayn o‘sha namunaga o‘xshab chiqadi.",
+        t3: "Boshqa sahifaga o‘tsangiz ham vazifa davom etadi — natija loyihada saqlanadi.",
+        t4: "Bitta rasm yoqmasa, faqat o‘shani qayta chizish mumkin — 1 token.",
+        t5: "Qayta chizishda tilak yozing, masalan: “fon yorug‘roq bo‘lsin”.",
+        t6: "Toza fonda, yaxshi yoritilgan mahsulot fotosi eng aniq natija beradi.",
+        t7: "Harakat tavsifi qisqa va aniq bo‘lsa, video silliqroq chiqadi.",
+      },
+    },
     progressStage1: "Token balansi tekshirilib, vazifa boshlanmoqda…", progressStage2: "AI mahsulotni tahlil qilib, dizayn tuzmoqda…", progressStage3: "Grafik elementlar va render chizilmoqda…", progressStage4: "Matnlar va vizual effektlar uyg‘unlashtirilmoqda…", progressStage5: "Natija yakunlanmoqda…",
     jobSavedNote: "Vazifa serverda saqlanadi. Qaytganingizda holat avtomatik tiklanadi.", failedTitle: "Generatsiya boshlanmadi", retry: "Yana urinish", readyPill: "Render tayyor", referenceDropped: "⚠ Dizayn referensi ishlatilmadi — AI xatosi tufayli oddiy shablonga o‘tildi. Qayta yarating.", referencePartial: "Referensdan faqat uslub tavsifi olindi — natija namunadan farq qilishi mumkin.",
     slideFix: "Shu rasmni qayta chizish", slideFixCount: "{{count}} marta qayta chizilgan", slideFixWishLabel: "Nimani o‘zgartiramiz? (ixtiyoriy)", slideFixWishPlaceholder: "Masalan: fon yorug‘roq bo‘lsin, mahsulot kattaroq",
@@ -533,7 +549,7 @@ const uz = {
 const ru: typeof uz = {
   common: { brand: "naslai.uz", token: "токен" },
   nav: { otherFeatures: "Другие возможности", batch: "Партия", createCard: "Создать карточку", newProject: "Создать проект", allProjects: "Все проекты", profileAria: "Профиль пользователя" },
-  profileMenu: { topUp: "Пополнить токены", profile: "Профиль", logout: "Выйти" },
+  profileMenu: { topUp: "Пополнить токены", profile: "Профиль", logout: "Выйти", adminPanel: "Админ-панель", adminPanelHint: "Промокоды, API ключи, токены", djangoAdmin: "Django admin", djangoAdminHint: "Откроется в новой вкладке" },
   profileHub: { tabProfile: "Профиль", tabTokens: "Токены и тарифы", tabHistory: "История токенов", tabApi: "API кабинет", tabRef: "Рефералка", tabsAria: "Разделы профиля", backHome: "На главную", modalTitle: "Пополнить баланс", modalAvailable: "Доступный баланс", modalClose: "Закрыть", priceTitle: "Цены на токены", priceNote: "1 токен = 1 готовая картинка. Цена указана по самому маленькому пакету; в больших токен дешевле.", priceImage: "Каждая готовая картинка", priceVariant: "Каждый доп. вариант", pricePage: "Каждая доп. страница", pricePackage: "Каждый слайд пакета ({{min}}–{{max}} слайдов)", planName: "Starter", planText: "Для теста карточек товара и небольшого каталога.", planSoon: "Скоро", planBuy: "Купить токены", planOff: "Оплата не подключена" },
   footer: {
     product: "ПРОДУКТ", home: "Главная", telegramChannel: "Telegram-канал",
@@ -915,6 +931,22 @@ const ru: typeof uz = {
     emptyTitle: "Здесь появится {{word}}", emptyHint: "Загрузите товар, настройте сценарий и начните генерацию.",
     analysisSteps: { s1: "Ваше фото получено", s2: "Проверяем качество снимка", s3: "AI распознаёт товар", s4: "Подбираем категорию и преимущества", s5: "Собираем бриф" },
     analysisNote: "Обычно 5–15 секунд. Не закрывайте страницу.",
+    stage: {
+      stepsLabel: "Этапы генерации",
+      steps: { s1: "Анализ товара", s2: "Сборка композиции", s3: "Цвет и свет", s4: "Текст и бейджи", s5: "Финальная шлифовка" },
+      photoS4: "Детали и тени",
+      video: { s2: "Построение сцены", s3: "Отрисовка движения", s4: "Сборка кадров" },
+      tipLabel: "Совет",
+      tips: {
+        t1: "С Magic Layers надписи на карточке можно отредактировать потом.",
+        t2: "Выберите стиль в галерее — дизайн получится в духе образца.",
+        t3: "Можно уйти на другую страницу — задача продолжится, результат сохранится в проекте.",
+        t4: "Не понравился один кадр — перерисуйте только его, это 1 токен.",
+        t5: "При перерисовке добавьте пожелание, например: «фон посветлее».",
+        t6: "Лучший результат — с чётким фото товара на чистом фоне и при хорошем свете.",
+        t7: "Чем короче и конкретнее описание движения, тем плавнее видео.",
+      },
+    },
     progressStage1: "Проверка токенов и запуск задачи…", progressStage2: "AI анализирует товар и строит композицию…", progressStage3: "Отрисовка графических элементов и рендера…", progressStage4: "Сведение текстов и визуальных эффектов…", progressStage5: "Завершение и подготовка результата…",
     jobSavedNote: "Задача сохраняется на сервере. При возврате статус восстановится автоматически.", failedTitle: "Генерация не началась", retry: "Попробовать снова", readyPill: "Рендер готов", referenceDropped: "⚠ Референс не применён — из-за ошибки AI сработал запасной шаблон. Попробуйте пересоздать.", referencePartial: "Из референса взято только текстовое описание стиля — результат может отличаться от образца.",
     slideFix: "Переделать эту картинку", slideFixCount: "переделана раз: {{count}}", slideFixWishLabel: "Что поменять? (необязательно)", slideFixWishPlaceholder: "Например: фон посветлее, товар крупнее",

@@ -35,6 +35,14 @@ export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
+/**
+ * Django admin manzili. API alohida domenda bo'lsa — o'sha domenning
+ * /admin/ sahifasi; aks holda (dev, bir domen) — production API.
+ */
+export function djangoAdminUrl(): string {
+  return /^https?:\/\//.test(API_BASE) ? `${API_BASE}/admin/` : "https://api.naslai.uz/admin/";
+}
+
 export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const method = (init?.method ?? "GET").toUpperCase();
   const headers: Record<string, string> = {

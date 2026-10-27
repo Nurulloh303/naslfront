@@ -171,6 +171,9 @@ export type AdminPromo = { code: string; kind: string; value: number; used: numb
 export type AdminTariff = { id: string; name: string; priceUzs: number; images: number; tokens: number };
 export type AdminGeneration = { id: string; email: string; status: string; tokens: number; title: string; contentType: string; createdAt: string; error: string | null };
 export type AdminOrder = { id: string; email: string; tokens: number; priceUzs: number; status: string; provider: string; createdAt: string };
+/** Admin: tashqi integratsiyalar uchun API kalit. Maxfiy qismi faqat yaratilganda bir marta keladi. */
+export type AdminApiKey = { id: number; name: string; prefix: string; balance: number; note: string; createdAt: string; lastUsedAt: string | null; userEmail: string; userId: number | string };
+export type AdminApiKeyCreate = { userId: number | string; name?: string; note?: string; initialTariff?: string; initialBalance?: number };
 
 type ApiErrorPayload = { message?: string; error?: string };
 
@@ -201,6 +204,10 @@ export const accountApi = {
     deletePromo: (code: string) => request<{ ok: boolean; disabledInsteadOfDeleted: boolean }>(`/api/admin/promos/${encodeURIComponent(code)}`, { method: "DELETE" }),
     generations: () => request<{ generations: AdminGeneration[] }>("/api/admin/generations"),
     orders: () => request<{ orders: AdminOrder[] }>("/api/admin/orders"),
+    apiKeys: () => request<{ keys: AdminApiKey[] }>("/api/admin/api-keys"),
+    createApiKey: (input: AdminApiKeyCreate) => request<{ key: AdminApiKey; secret: string }>("/api/admin/api-keys", { method: "POST", body: JSON.stringify(input) }),
+    topUpApiKey: (id: number | string, input: { tariff?: string; amount?: number; note?: string }) => request<{ ok: boolean; balance: number; added: number }>(`/api/admin/api-keys/${encodeURIComponent(String(id))}`, { method: "POST", body: JSON.stringify(input) }),
+    deleteApiKey: (id: number | string) => request<{ ok: boolean }>(`/api/admin/api-keys/${encodeURIComponent(String(id))}`, { method: "DELETE" }),
   },
   loginWithGoogle: (credential: string) => request<{ account: AccountSnapshot }>("/api/auth/google", { method: "POST", body: JSON.stringify({ credential }) }),
   loginWithTelegram: (payload: Record<string, unknown>) => request<{ account: AccountSnapshot }>("/api/auth/telegram", { method: "POST", body: JSON.stringify(payload) }),

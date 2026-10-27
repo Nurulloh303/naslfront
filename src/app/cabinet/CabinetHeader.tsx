@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAccount } from "../account/AccountContext";
+import { djangoAdminUrl } from "../apiClient";
 import { BrandMark } from "../BrandMark";
 import type { CabinetRoute } from "../routes";
 import { useLanguage } from "../../i18n/LanguageContext";
@@ -48,7 +49,14 @@ export function ProfileMenu({ route, balance, onNavigate, onLogout }: ProfileMen
     {open && <div className="profile-popover profile-menu" role="menu" aria-label={t("nav.profileAria")}>
       <button className="profile-menu-action" type="button" role="menuitem" onClick={() => go("billing")}><b>{t("profileMenu.topUp")}</b><span>+</span></button>
       <button type="button" role="menuitem" aria-current={route === "profile" ? "page" : undefined} onClick={() => go("profile")}><b>{t("profileMenu.profile")}</b><span>♙</span></button>
-      {account?.isAdmin && <button type="button" role="menuitem" onClick={() => go("admin")}><b>Админка</b><span>⚙</span></button>}
+      {account?.isAdmin && <>
+        <button className="profile-menu-admin" type="button" role="menuitem" aria-current={route === "admin" ? "page" : undefined} onClick={() => go("admin")}>
+          <span className="profile-menu-admin-text"><b>{t("profileMenu.adminPanel")}</b><small>{t("profileMenu.adminPanelHint")}</small></span><span aria-hidden="true">⚙</span>
+        </button>
+        <button className="profile-menu-admin is-external" type="button" role="menuitem" onClick={() => { setOpen(false); window.open(djangoAdminUrl(), "_blank", "noopener,noreferrer"); }}>
+          <span className="profile-menu-admin-text"><b>{t("profileMenu.djangoAdmin")}</b><small>{t("profileMenu.djangoAdminHint")}</small></span><span aria-hidden="true">↗</span>
+        </button>
+      </>}
       <button type="button" role="menuitem" onClick={() => { setOpen(false); onLogout?.(); }}><b>{t("profileMenu.logout")}</b><span>↪</span></button>
     </div>}
   </div>;
