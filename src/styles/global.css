@@ -1613,6 +1613,16 @@ button:not(:disabled):hover { transition-timing-function: var(--ease); }
 .provider-row button:hover { transform: translateY(-2px); border-color: var(--border-strong); }
 .provider-row button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-wash); color: var(--accent-soft-text); }
 .buy-submit { width: 100%; min-height: 52px; font-size: 16px; }
+.buy-telegram { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 18px 20px; margin-bottom: 18px; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, var(--accent) 4%, transparent)); }
+.buy-telegram-text { display: grid; gap: 4px; min-width: 0; flex: 1 1 260px; }
+.buy-telegram-text b { font-family: var(--font-display); font-size: 18px; color: var(--text-primary); }
+.buy-telegram-text p { margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+.buy-telegram-text small { color: var(--text-secondary); font-size: 12px; opacity: .8; overflow-wrap: anywhere; }
+.buy-telegram-actions { display: grid; gap: 8px; justify-items: center; flex: 0 1 auto; }
+.buy-telegram-main { white-space: nowrap; }
+.buy-telegram-backup { font-size: 13px; color: var(--text-secondary); text-decoration: underline; text-underline-offset: 3px; }
+.buy-telegram-backup:hover { color: var(--accent); }
+@media (max-width: 560px) { .buy-telegram-actions { width: 100%; } .buy-telegram-main { width: 100%; justify-content: center; white-space: normal; text-align: center; } }
 .buy-warning {
   display: grid; gap: 8px; justify-items: start;
   padding: 16px 18px;

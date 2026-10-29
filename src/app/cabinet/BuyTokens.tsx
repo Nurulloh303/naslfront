@@ -13,7 +13,11 @@ import { useLanguage } from "../../i18n/LanguageContext";
  * olib boradi — foydalanuvchi to'lov o'tgan deb o'ylab qolmasligi kerak.
  */
 
-const ADMIN_TELEGRAM = "https://t.me/naslaiadmin";
+/** Token sotish bo'yicha asosiy menejer — barcha "sotib olish" tugmalari shu yerga olib boradi. */
+const SALES_TELEGRAM = { handle: "@makhmudaliiyev", url: "https://t.me/makhmudaliiyev" };
+/** Zaxira: asosiy javob bermasa. */
+const SALES_TELEGRAM_BACKUP = { handle: "@Itcenterdev", url: "https://t.me/Itcenterdev" };
+const ADMIN_TELEGRAM = SALES_TELEGRAM.url;
 
 function formatSum(value: number) {
   return Number.isFinite(value) ? value.toLocaleString("ru-RU").replace(/,/g, "\u00a0") : "—";
@@ -124,6 +128,22 @@ export function BuyTokens() {
       <h2>{t("buy.title")}</h2>
       <p>{t("buy.subtitle")}</p>
     </div>
+
+    <section className="buy-telegram" aria-label={t("buy.tgTitle")}>
+      <div className="buy-telegram-text">
+        <b>{t("buy.tgTitle")}</b>
+        <p>{t("buy.tgText")}</p>
+        <small>{t("buy.tgHint")}{account.user.email ? ` (${account.user.email})` : ""}</small>
+      </div>
+      <div className="buy-telegram-actions">
+        <a className="button primary buy-telegram-main" href={SALES_TELEGRAM.url} target="_blank" rel="noopener noreferrer">
+          <span aria-hidden="true">✈</span> {t("buy.tgPrimary")} · {SALES_TELEGRAM.handle}
+        </a>
+        <a className="buy-telegram-backup" href={SALES_TELEGRAM_BACKUP.url} target="_blank" rel="noopener noreferrer">
+          {t("buy.tgSecondary")}: {SALES_TELEGRAM_BACKUP.handle}
+        </a>
+      </div>
+    </section>
 
     <PromoRedeem />
 
