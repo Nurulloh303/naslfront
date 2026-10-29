@@ -1,6 +1,6 @@
 import { apiFetch } from "../../../app/apiClient";
 import { downloadFile } from "../../../app/downloadHelper";
-import type { GenerationElement, GenerationJob, GenerationLayer, GenerationSettings, GenerationTextLayer, ProductAsset, ProductBrief, ProductListing, Quote, SlidePlan } from "../domain/types";
+import type { ExtractLayerErrorCode, ExtractLayerPoint, ExtractLayerResponse, GenerationElement, GenerationJob, GenerationLayer, GenerationSettings, GenerationTextLayer, ProductAsset, ProductBrief, ProductListing, Quote, SlidePlan } from "../domain/types";
 
 type StartResponse = { job: GenerationJob; balance: number; idempotentReplay: boolean };
 export type CancelResponse = { job: GenerationJob; balance: number; refunded: number; delivered: number };
@@ -10,7 +10,19 @@ export type SeparateLayersOptions = {
   /** Mahsulot/fon kabi rastr qatlamlarni ham ajratish (ixtiyoriy). */
   separateObjects?: boolean;
 };
-/** Magic Layers v4 javobi (API kontrakti). Barcha URL'lar mutlaq va CORS ochiq. */
+/** "Bosib ajratish" xatosi: HTTP holati va (422 bo'lsa) server kodi. */
+export class ExtractLayerError extends Error {
+  readonly status: number;
+  readonly code: ExtractLayerErrorCode | string | null;
+  constructor(message: string, status: number, code: ExtractLayerErrorCode | string | null) {
+    super(message);
+    this.name = "ExtractLayerError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/** Magic Layers v4/v5 javobi (API kontrakti; v5 — shakli o'sha, `layersVersion: 5`). Barcha URL'lar mutlaq va CORS ochiq. */
 export type SeparateLayersResponse = {
   width: number;
   height: number;
@@ -44,6 +56,8 @@ export type CreateApi = {
   regenerateSlide(jobId: string, variant: number, note: string): Promise<{ job: GenerationJob; balance: number }>;
   /** Rasmni AI orqali qatlamlarga (fon, mahsulot, matn) ajratish. */
   separateLayers(jobId: string, variant: number, options?: SeparateLayersOptions): Promise<SeparateLayersResponse>;
+  /** Magic Layers v5: bosilgan nuqtadagi obyektni alohida qatlamga ajratish (rasm px). */
+  extractLayer(jobId: string, variant: number, point: ExtractLayerPoint): Promise<ExtractLayerResponse>;
   /** Brauzerda yig'ilgan (o'z matni bilan) slaydni saqlash. Bepul. */
   compose(jobId: string, variant: number, imageDataUrl: string): Promise<{ job: GenerationJob }>;
   /** Slayd qayta chizilishini kuzatish: umumiy vazifa holati o'zgarmaydi. */
@@ -115,6 +129,23 @@ export function createP0Api(): CreateApi {
           }),
         },
       );
+    },
+    async extractLayer(jobId, variant, point) {
+      let response: Response;
+      try {
+        response = await apiFetch(`/api/generations/${encodeURIComponent(jobId)}/results/${variant}/layers/extract`, {
+          method: "POST",
+          body: JSON.stringify({ x: Math.round(point.x), y: Math.round(point.y) }),
+        });
+      } catch (reason) {
+        throw new ExtractLayerError(reason instanceof Error ? reason.message : "Server bilan aloqa uzildi", 0, null);
+      }
+      const payload = await response.json().catch(() => null) as (Partial<ExtractLayerResponse> & { error?: string; message?: string }) | null;
+      if (!response.ok) {
+        throw new ExtractLayerError(payload?.message ?? `HTTP ${response.status}`, response.status, payload?.error ?? null);
+      }
+      if (!payload?.element?.url || !payload.backgroundUrl) throw new ExtractLayerError("Serverdan bo‘sh javob keldi", response.status, null);
+      return { element: payload.element, backgroundUrl: payload.backgroundUrl };
     },
     async compose(jobId, variant, imageDataUrl) {
       return jsonRequest<{ job: GenerationJob }>(

@@ -7,7 +7,7 @@ import { Showcase3D } from "./Showcase3D";
 import { TextLayerEditor } from "./TextLayerEditor";
 import { MagicLayersEditor, type MagicLayersSource } from "./MagicLayersEditor";
 import { ListingResult } from "./ListingBlocks";
-import type { AspectRatio, ContentMode, GenerationJob, GenerationResult } from "../domain/types";
+import type { AspectRatio, ContentMode, ExtractLayerPoint, ExtractLayerResponse, GenerationJob, GenerationResult } from "../domain/types";
 import type { SeparateLayersOptions, SeparateLayersResponse } from "../services/createApi";
 import { useLanguage } from "../../../i18n/LanguageContext";
 
@@ -34,6 +34,8 @@ type Props = {
   onComposeSlide?: (variant: number, imageDataUrl: string) => Promise<boolean> | void;
   /** AI orqali rasmni shaffof qatlamlarga ajratish (Magic Layers). */
   onSeparateLayers?: (variant: number, options?: SeparateLayersOptions) => Promise<SeparateLayersResponse>;
+  /** Magic Layers v5 "Bosib ajratish": nuqtadagi obyektni alohida qatlamga ajratish. */
+  onExtractLayer?: (variant: number, point: ExtractLayerPoint) => Promise<ExtractLayerResponse>;
   /** Magic Layers muharriridagi "← Orqaga": bosh sahifaga (karta yaratish) qaytish. */
   onBack?: () => void;
   /** Тавсиф yozishda xatolik bo'lsa — qayta urinish. */
@@ -157,7 +159,7 @@ function SlideFix({ variant, count, note, busy, disabled, onSubmit }: {
 }
 
 /** Joriy qatlamlar formati: fon + obyektlar + matn kesmalari. Boshqa versiya ochilganda qayta ajratiladi. */
-const LAYERS_VERSION = 4;
+const LAYERS_VERSION = 5;
 
 /** Natija/javobdan muharrir manbasini yig'adi. `baseUrl` bo'lmasa — natijaning o'z rasmi. */
 function toMagicSource(result: GenerationResult, data?: Partial<SeparateLayersResponse>): MagicLayersSource {
@@ -176,7 +178,7 @@ function toMagicSource(result: GenerationResult, data?: Partial<SeparateLayersRe
   };
 }
 
-export function ResultPanel({ job, contentType, hasReference, productImageUrl, stageAspectRatio, onGenerate, onDownload, onEditSettings, onNewProject, onRate, onCancel, cancelling, onRegenerateSlide, onComposeSlide, onSeparateLayers, onBack, onRetryListing }: Props) {
+export function ResultPanel({ job, contentType, hasReference, productImageUrl, stageAspectRatio, onGenerate, onDownload, onEditSettings, onNewProject, onRate, onCancel, cancelling, onRegenerateSlide, onComposeSlide, onSeparateLayers, onExtractLayer, onBack, onRetryListing }: Props) {
   const { t } = useLanguage();
   // Оценка хранится ПО ВАРИАНТАМ. Раньше состояние было одно на всю
   // панель, и оценка одного варианта подсвечивала звёзды у всех.
@@ -261,7 +263,7 @@ export function ResultPanel({ job, contentType, hasReference, productImageUrl, s
   const handleOpenLayers = async (variant: number) => {
     const targetResult = job.results[variant - 1];
     if (!targetResult) return;
-    // v4 formatidagi natija — darhol ochamiz (obyekt/matn bo'lmasa ham: fon + "Matn qo'shish").
+    // Joriy (v5) formatidagi natija — darhol ochamiz (obyekt/matn bo'lmasa ham: fon + "Matn qo'shish").
     if (targetResult.layersVersion === LAYERS_VERSION && targetResult.backgroundUrl) {
       openMagic(variant, toMagicSource(targetResult));
       return;
@@ -337,6 +339,7 @@ export function ResultPanel({ job, contentType, hasReference, productImageUrl, s
             setSavingVariant(null);
           });
         }}
+        onExtract={onExtractLayer ? (point) => onExtractLayer(activeMagicVariant, point) : undefined}
         onReseparate={
           onSeparateLayers
             ? () => onSeparateLayers(activeMagicVariant, { force: true }).then((res) => toMagicSource(job.results[activeMagicVariant - 1], res))

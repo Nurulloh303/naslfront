@@ -1393,3 +1393,287 @@ a.magic-btn {
   text-align: center;
   border-radius: 16px;
 }
+
+/* ============================================================
+   v5: "Bosib ajratish" + guruhlangan qatlamlar ro'yxati
+   ============================================================ */
+.magic-wand-icon {
+  display: inline-block;
+  vertical-align: -3px;
+  flex-shrink: 0;
+}
+
+.magic-btn.magic-extract-toggle.is-on,
+.magic-btn.magic-extract-toggle.is-on:hover:not(:disabled) {
+  background: #ff4d1c;
+  border-color: #ff4d1c;
+  color: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 77, 28, 0.25);
+}
+
+.magic-extract-toggle.is-busy .magic-wand-icon {
+  animation: magicWandPulse 0.9s ease-in-out infinite;
+}
+
+@keyframes magicWandPulse {
+  0%, 100% { opacity: 1; transform: rotate(0deg); }
+  50% { opacity: 0.55; transform: rotate(-12deg); }
+}
+
+.magic-extract-bar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  width: max-content;
+  margin: 0 auto;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 20px);
+  padding: 6px 6px 6px 12px;
+  border-radius: 999px;
+  background: rgba(20, 18, 17, 0.88);
+  border: 1px solid rgba(255, 77, 28, 0.55);
+  color: #fffdf7;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: magicFadeIn 0.18s ease-out both;
+  /* Panel ostidagi joyni ham bosish mumkin bo'lsin (faqat ✕ tugmasi bosiladi). */
+  pointer-events: none;
+}
+
+.magic-extract-bar .magic-mini-btn {
+  pointer-events: auto;
+}
+
+.magic-extract-bar .magic-wand-icon {
+  color: #ff4d1c;
+}
+
+.magic-extract-bar-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.magic-extract-bar-text b {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.magic-extract-bar-text small {
+  font-size: 11px;
+  color: rgba(255, 253, 247, 0.55);
+  white-space: nowrap;
+}
+
+.magic-extract-bar:not(:has(.magic-mini-btn)) {
+  padding-right: 14px;
+}
+
+.magic-extract-dot,
+.magic-extract-pending {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.magic-extract-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff4d1c;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+}
+
+.magic-extract-dot::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 77, 28, 0.85);
+  animation: magicExtractPulse 1.4s ease-out infinite;
+}
+
+@keyframes magicExtractPulse {
+  0% { transform: scale(1); opacity: 0.9; }
+  100% { transform: scale(3.2); opacity: 0; }
+}
+
+.magic-extract-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.magic-extract-ring {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ff4d1c;
+  border-right-color: #ff4d1c;
+  background: rgba(20, 18, 17, 0.25);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 4px 16px rgba(0, 0, 0, 0.35);
+  animation: magicSpin 0.8s linear infinite;
+}
+
+.magic-extract-label {
+  position: absolute;
+  top: calc(100% + 6px);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(20, 18, 17, 0.9);
+  color: #fffdf7;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.magic-toast {
+  /* Kanvas ustida bo'lsa ham bosishlarni to'smasin. */
+  pointer-events: none;
+  /* magicFadeIn `transform`ni almashtirib, translateX(-50%) ni yo'qotardi (toast markazda emas edi). */
+  animation-name: magicToastIn;
+}
+
+@keyframes magicToastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to { opacity: 1; transform: translateX(-50%); }
+}
+
+.magic-toast.is-success {
+  border-color: rgba(46, 160, 67, 0.7);
+}
+
+.magic-toast.is-success::before {
+  content: "✓ ";
+  color: #4ade80;
+}
+
+.magic-toast.is-error {
+  border-color: rgba(255, 77, 28, 0.75);
+  background: rgba(48, 20, 14, 0.96);
+}
+
+/* Guruhlangan ro'yxat */
+.magic-layer-list {
+  gap: 10px;
+}
+
+.magic-layer-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.magic-layer-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.magic-layer-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.magic-layer-group-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;
+  background: none;
+  border: none;
+  color: rgba(255, 253, 247, 0.75);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+}
+
+.magic-layer-group-toggle:hover {
+  color: #fffdf7;
+}
+
+.magic-layer-group-chevron {
+  display: inline-block;
+  width: 12px;
+  transition: transform 0.15s ease;
+}
+
+.magic-layer-group-header.is-collapsed .magic-layer-group-chevron {
+  transform: rotate(-90deg);
+}
+
+.magic-layer-group-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 253, 247, 0.6);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.magic-layer-group-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 253, 247, 0.7);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.magic-layer-group-all:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fffdf7;
+}
+
+.magic-layer-thumb.is-loading {
+  animation: magicThumbPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes magicThumbPulse {
+  50% { opacity: 0.5; }
+}
+
+@media (max-width: 640px) {
+  .magic-extract-bar-text b {
+    font-size: 12px;
+  }
+
+  .magic-layer-group-all {
+    padding: 6px 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .magic-extract-dot::after,
+  .magic-extract-toggle.is-busy .magic-wand-icon {
+    animation: none;
+  }
+}

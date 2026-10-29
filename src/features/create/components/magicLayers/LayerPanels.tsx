@@ -1,4 +1,4 @@
-import { useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useLanguage } from "../../../../i18n/LanguageContext";
 import {
   BACKGROUND_ID,
@@ -175,8 +175,11 @@ type LayersListProps = {
   failed: Record<string, boolean>;
   onSelect: (id: string) => void;
   onEdit: (layer: TextLayerItem) => void;
+  /** Ro'yxatdagi qatorga kursor keldi — kanvasda shu qatlam ramkasi yoritiladi. */
   onHover: (id: string | null) => void;
   onToggleVisible: (id: string) => void;
+  /** Guruhdagi barcha qatlamlarni bitta qadamda ko'rsatish/yashirish. */
+  onSetVisible: (ids: string[], visible: boolean) => void;
   onToggleLock: (id: string) => void;
   onDelete: (id: string) => void;
   onMoveToIndex: (id: string, index: number) => void;
@@ -192,20 +195,77 @@ function isLightColor(hex: string): boolean {
   return lum > 0.75;
 }
 
-export function LayersList({ layers, background, selectedId, thumbs, failed, onSelect, onEdit, onHover, onToggleVisible, onToggleLock, onDelete, onMoveToIndex, onBackgroundVisible }: LayersListProps) {
+type GroupKey = "product" | "graphic" | "text" | "background";
+
+function groupKeyOf(layer: EditorLayer): GroupKey {
+  return layer.kind === "text" ? "text" : layer.elementKind;
+}
+
+type GroupHeaderProps = {
+  groupKey: GroupKey;
+  title: string;
+  count: number;
+  collapsed: boolean;
+  anyVisible: boolean;
+  onToggleCollapsed: () => void;
+  onToggleAll: () => void;
+};
+
+function GroupHeader({ groupKey, title, count, collapsed, anyVisible, onToggleCollapsed, onToggleAll }: GroupHeaderProps) {
+  const { t } = useLanguage();
+  const allLabel = anyVisible ? t("magicLayers.hideAll") : t("magicLayers.showAll");
+  return (
+    <div className={`magic-layer-group-header ${collapsed ? "is-collapsed" : ""}`} data-group={groupKey}>
+      <button
+        type="button"
+        className="magic-layer-group-toggle"
+        aria-expanded={!collapsed}
+        title={t("magicLayers.collapseGroup")}
+        onClick={onToggleCollapsed}
+      >
+        <span className="magic-layer-group-chevron" aria-hidden="true">▾</span>
+        <span className="magic-layer-group-title">{title}</span>
+        <span className="magic-layer-group-count">{count}</span>
+      </button>
+      <button type="button" className="magic-layer-group-all" onClick={onToggleAll} title={allLabel} aria-label={`${title}: ${allLabel}`}>
+        <span aria-hidden="true">{anyVisible ? "🕶" : "👁"}</span>
+        <span className="magic-layer-group-all-label">{allLabel}</span>
+      </button>
+    </div>
+  );
+}
+
+export function LayersList({ layers, background, selectedId, thumbs, failed, onSelect, onEdit, onHover, onToggleVisible, onSetVisible, onToggleLock, onDelete, onMoveToIndex, onBackgroundVisible }: LayersListProps) {
   const { t } = useLanguage();
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropId, setDropId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<GroupKey, boolean>>({ product: false, graphic: false, text: false, background: false });
+  const listRef = useRef<HTMLDivElement>(null);
 
-  // Ro'yxat yuqoridan pastga: matnlar (yuqorisi birinchi), obyektlar, fon.
+  // Har bir guruh yuqoridan pastga (yuqoridagi qatlam — birinchi).
   const texts = groupOf(layers, "text").filter((l) => !l.deleted).reverse() as TextLayerItem[];
   const elements = groupOf(layers, "element").filter((l) => !l.deleted).reverse() as ElementItem[];
+  const products = elements.filter((l) => l.elementKind === "product");
+  const graphics = elements.filter((l) => l.elementKind !== "product");
   const dragLayer = dragId ? layers.find((l) => l.id === dragId) : null;
+
+  // Tanlangan qatlam (masalan, yangi ajratilgan) yig'ilgan guruhda bo'lsa — guruhni ochamiz va ko'rsatamiz.
+  const selectedLayer = selectedId ? layers.find((l) => l.id === selectedId && !l.deleted) : null;
+  const selectedGroup: GroupKey | null = selectedId === BACKGROUND_ID ? "background" : selectedLayer ? groupKeyOf(selectedLayer) : null;
+  useEffect(() => {
+    if (!selectedGroup) return;
+    setCollapsed((c) => (c[selectedGroup] ? { ...c, [selectedGroup]: false } : c));
+  }, [selectedId, selectedGroup]);
+  useEffect(() => {
+    if (!selectedId) return;
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-layer-id="${CSS.escape(selectedId)}"]`);
+    el?.scrollIntoView?.({ block: "nearest" });
+  }, [selectedId, collapsed]);
 
   const onDrop = (target: EditorLayer) => (e: DragEvent) => {
     e.preventDefault();
     setDropId(null);
-    if (!dragLayer || dragLayer.kind !== target.kind || dragLayer.id === target.id) return;
+    if (!dragLayer || groupKeyOf(dragLayer) !== groupKeyOf(target) || dragLayer.id === target.id) return;
     const group = groupOf(layers, target.kind);
     onMoveToIndex(dragLayer.id, group.findIndex((l) => l.id === target.id));
     setDragId(null);
@@ -214,13 +274,14 @@ export function LayersList({ layers, background, selectedId, thumbs, failed, onS
   const row = (layer: EditorLayer) => {
     const isSelected = layer.id === selectedId;
     const isText = layer.kind === "text";
-    const canDrop = dragLayer && dragLayer.kind === layer.kind && dragLayer.id !== layer.id;
+    const canDrop = dragLayer && groupKeyOf(dragLayer) === groupKeyOf(layer) && dragLayer.id !== layer.id;
     const status = isText
       ? `${!layer.pristine ? t("magicLayers.stateNew") : isTextDirty(layer) ? t("magicLayers.stateEdited") : t("magicLayers.stateOriginal")} · ${layer.fontFamily}`
-      : `${layer.elementKind === "product" ? t("magicLayers.elementProduct") : t("magicLayers.elementGraphic")}${failed[layer.url] ? ` · ${t("magicLayers.imageFailed")}` : ""}`;
+      : `${layer.elementKind === "product" ? t("magicLayers.elementProduct") : t("magicLayers.elementGraphic")} · ${Math.round(layer.width)}×${Math.round(layer.height)}${failed[layer.url] ? ` · ${t("magicLayers.imageFailed")}` : ""}`;
     return (
       <div
         key={layer.id}
+        data-layer-id={layer.id}
         className={`magic-layer-item ${isSelected ? "is-active" : ""} ${!layer.visible ? "is-hidden" : ""} ${dropId === layer.id && canDrop ? "is-drop" : ""} ${dragId === layer.id ? "is-dragging" : ""}`}
         role="button"
         tabIndex={0}
@@ -235,6 +296,8 @@ export function LayersList({ layers, background, selectedId, thumbs, failed, onS
         onDoubleClick={() => { if (layer.kind === "text" && !layer.locked) onEdit(layer); }}
         onMouseEnter={() => onHover(layer.id)}
         onMouseLeave={() => onHover(null)}
+        onFocus={() => onHover(layer.id)}
+        onBlur={() => onHover(null)}
         onKeyDown={(e) => {
           if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
             e.preventDefault();
@@ -250,9 +313,9 @@ export function LayersList({ layers, background, selectedId, thumbs, failed, onS
             style={{ fontFamily: fontStack(layer.fontFamily), color: layer.color, background: layer.background ?? (isLightColor(layer.color) ? "#2A2523" : undefined) }}
           >T</span>
         ) : thumbs[layer.url] ? (
-          <img src={thumbs[layer.url]} alt="" className="magic-layer-thumb is-cutout" />
+          <img src={thumbs[layer.url]} alt="" className="magic-layer-thumb is-cutout" loading="lazy" decoding="async" />
         ) : (
-          <span className="magic-layer-thumb is-cutout" aria-hidden="true" />
+          <span className={`magic-layer-thumb is-cutout ${failed[layer.url] ? "" : "is-loading"}`} aria-hidden="true" />
         )}
         <div className="magic-layer-info">
           <div className="magic-layer-name">{layer.kind === "text" ? firstLine(layer.text) || t("magicLayers.textLayer") : layer.name}</div>
@@ -281,40 +344,78 @@ export function LayersList({ layers, background, selectedId, thumbs, failed, onS
     );
   };
 
+  const toggleCollapsed = (key: GroupKey) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
+
+  const group = (key: GroupKey, title: string, items: EditorLayer[]) => {
+    if (!items.length) return null;
+    const anyVisible = items.some((l) => l.visible);
+    return (
+      <div className="magic-layer-group" data-group={key} key={key}>
+        <GroupHeader
+          groupKey={key}
+          title={title}
+          count={items.length}
+          collapsed={collapsed[key]}
+          anyVisible={anyVisible}
+          onToggleCollapsed={() => toggleCollapsed(key)}
+          onToggleAll={() => onSetVisible(items.map((l) => l.id), !anyVisible)}
+        />
+        {collapsed[key] ? null : <div className="magic-layer-group-items">{items.map(row)}</div>}
+      </div>
+    );
+  };
+
   const bgSelected = selectedId === BACKGROUND_ID;
   return (
-    <div className="magic-layer-list">
-      {texts.map(row)}
-      {elements.map(row)}
-      <div
-        className={`magic-layer-item is-background ${bgSelected ? "is-active" : ""} ${!background.visible ? "is-hidden" : ""}`}
-        role="button"
-        tabIndex={0}
-        aria-pressed={bgSelected}
-        onClick={() => onSelect(BACKGROUND_ID)}
-        onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) { e.preventDefault(); onSelect(BACKGROUND_ID); } }}
-      >
-        <span className="magic-drag-grip is-disabled" aria-hidden="true">⋮⋮</span>
-        {background.color ? (
-          <span className="magic-layer-thumb" style={{ background: background.color }} aria-hidden="true" />
-        ) : thumbs.__background ? (
-          <img src={thumbs.__background} alt="" className="magic-layer-thumb" />
-        ) : (
-          <span className="magic-layer-thumb" aria-hidden="true" />
+    <div className="magic-layer-list" ref={listRef}>
+      {group("product", t("magicLayers.groupProduct"), products)}
+      {group("graphic", t("magicLayers.groupElements"), graphics)}
+      {group("text", t("magicLayers.groupTexts"), texts)}
+      <div className="magic-layer-group" data-group="background">
+        <GroupHeader
+          groupKey="background"
+          title={t("magicLayers.groupBackground")}
+          count={1}
+          collapsed={collapsed.background}
+          anyVisible={background.visible}
+          onToggleCollapsed={() => toggleCollapsed("background")}
+          onToggleAll={onBackgroundVisible}
+        />
+        {collapsed.background ? null : (
+          <div className="magic-layer-group-items">
+            <div
+              data-layer-id={BACKGROUND_ID}
+              className={`magic-layer-item is-background ${bgSelected ? "is-active" : ""} ${!background.visible ? "is-hidden" : ""}`}
+              role="button"
+              tabIndex={0}
+              aria-pressed={bgSelected}
+              onClick={() => onSelect(BACKGROUND_ID)}
+              onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) { e.preventDefault(); onSelect(BACKGROUND_ID); } }}
+            >
+              <span className="magic-drag-grip is-disabled" aria-hidden="true">⋮⋮</span>
+              {background.color ? (
+                <span className="magic-layer-thumb" style={{ background: background.color }} aria-hidden="true" />
+              ) : thumbs.__background ? (
+                <img src={thumbs.__background} alt="" className="magic-layer-thumb" />
+              ) : (
+                <span className="magic-layer-thumb" aria-hidden="true" />
+              )}
+              <div className="magic-layer-info">
+                <div className="magic-layer-name">{t("magicLayers.bgLayer")}</div>
+                <div className="magic-layer-meta">{background.color ? `${t("magicLayers.bgColor")} · ${background.color}` : t("magicLayers.bgLayerMeta")}</div>
+              </div>
+              <div className="magic-layer-btns">
+                <button type="button" className={`magic-mini-btn ${background.visible ? "" : "is-active"}`}
+                  title={background.visible ? t("magicLayers.hide") : t("magicLayers.show")}
+                  aria-label={background.visible ? t("magicLayers.hide") : t("magicLayers.show")}
+                  onClick={(e) => { e.stopPropagation(); onBackgroundVisible(); }}>
+                  {background.visible ? "👁" : "🕶"}
+                </button>
+                <span className="magic-lock" aria-label={t("magicLayers.locked")} title={t("magicLayers.locked")}>🔒</span>
+              </div>
+            </div>
+          </div>
         )}
-        <div className="magic-layer-info">
-          <div className="magic-layer-name">{t("magicLayers.bgLayer")}</div>
-          <div className="magic-layer-meta">{background.color ? `${t("magicLayers.bgColor")} · ${background.color}` : t("magicLayers.bgLayerMeta")}</div>
-        </div>
-        <div className="magic-layer-btns">
-          <button type="button" className={`magic-mini-btn ${background.visible ? "" : "is-active"}`}
-            title={background.visible ? t("magicLayers.hide") : t("magicLayers.show")}
-            aria-label={background.visible ? t("magicLayers.hide") : t("magicLayers.show")}
-            onClick={(e) => { e.stopPropagation(); onBackgroundVisible(); }}>
-            {background.visible ? "👁" : "🕶"}
-          </button>
-          <span className="magic-lock" aria-label={t("magicLayers.locked")} title={t("magicLayers.locked")}>🔒</span>
-        </div>
       </div>
     </div>
   );

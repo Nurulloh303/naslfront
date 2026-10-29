@@ -203,6 +203,18 @@ export type GenerationElement = {
   order: number;
 };
 
+/** Magic Layers v5 "Bosib ajratish": so'rov (rasm px, butun son). */
+export type ExtractLayerPoint = { x: number; y: number };
+
+/** Magic Layers v5 "Bosib ajratish" javobi: yangi obyekt + undan tozalangan yangi fon. */
+export type ExtractLayerResponse = {
+  element: GenerationElement;
+  backgroundUrl: string;
+};
+
+/** 422 xato kodlari. */
+export type ExtractLayerErrorCode = "NOTHING_FOUND" | "TOO_LARGE";
+
 export type GenerationResult = {
   id: string;
   title: string;

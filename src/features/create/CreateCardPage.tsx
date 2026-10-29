@@ -357,6 +357,7 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
             cancelling={cancelling}
             onRegenerateSlide={(variant, note) => void flow.regenerateSlide(variant, note)}
             onSeparateLayers={(variant, options) => flow.separateLayers(variant, options)}
+            onExtractLayer={(variant, point) => flow.extractLayer(variant, point)}
             onBack={goHome}
             onComposeSlide={(variant, dataUrl) => flow.composeSlide(variant, dataUrl)}
             onRetryListing={flow.retryListing}

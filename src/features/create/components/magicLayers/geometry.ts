@@ -289,6 +289,24 @@ export function drawOutline(ctx: CanvasRenderingContext2D, layer: EditorLayer, u
   ctx.restore();
 }
 
+/** Ro'yxatdagi qatorga kursor kelganda: qatlam ramkasi yorqin chiziq va yengil to'ldirish bilan. */
+export function drawHighlight(ctx: CanvasRenderingContext2D, layer: EditorLayer, unit: number): void {
+  const rect = layerRect(layer);
+  const pad = 3 * unit;
+  const r = { x: rect.x - pad, y: rect.y - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
+  ctx.save();
+  applyRotation(ctx, r, layer.rotation);
+  ctx.fillStyle = "rgba(255, 77, 28, 0.12)";
+  ctx.fillRect(r.x, r.y, r.width, r.height);
+  ctx.lineWidth = 4 * unit;
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+  ctx.strokeRect(r.x, r.y, r.width, r.height);
+  ctx.lineWidth = 2 * unit;
+  ctx.strokeStyle = SELECTION_COLOR;
+  ctx.strokeRect(r.x, r.y, r.width, r.height);
+  ctx.restore();
+}
+
 /** Tanlangan qatlam ramkasi va tutqichlari. `unit` — 1 CSS px necha kanvas px. */
 export function drawSelection(ctx: CanvasRenderingContext2D, layer: EditorLayer, unit: number, handleRadiusCss: number, rotOffsetCss: number): void {
   const rect = layerRect(layer);

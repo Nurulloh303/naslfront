@@ -1,7 +1,7 @@
 import type { GenerationElement, GenerationRect, GenerationTextLayer } from "../../domain/types";
 
 /**
- * Magic Layers v4 muharriri holati.
+ * Magic Layers v4/v5 muharriri holati.
  *
  * Sahna (pastdan yuqoriga): fon → obyektlar (`order` bo'yicha) → matnlar
  * (`order` bo'yicha). Obyekt va matnlar o'z guruhi ichida tartiblanadi.
@@ -85,6 +85,11 @@ export type BackgroundState = {
   visible: boolean;
   /** null — asl fon rasmi; aks holda bir xil rang. */
   color: string | null;
+  /**
+   * Joriy fon rasmi URL'i (v5: "Bosib ajratish" har safar yangi fon qaytaradi).
+   * null — manbadagi `backgroundUrl`. Tarixda saqlanadi — undo eski fonni qaytaradi.
+   */
+  imageUrl: string | null;
 };
 
 export type EditorState = {
@@ -274,6 +279,34 @@ export function buildEditorLayers(
     });
 
   return [...items, ...texts];
+}
+
+/**
+ * "Bosib ajratish" (v5) natijasidan yangi obyekt qatlami: boshqa obyektlar ustida
+ * (obyektlar guruhining eng yuqorisi — ya'ni matnlardan bir pog'ona pastda).
+ */
+export function extractedElementItem(el: GenerationElement, layers: EditorLayer[], fallbackName: string): ElementItem {
+  const original = { x: Math.round(el.x), y: Math.round(el.y), width: Math.max(1, Math.round(el.width)), height: Math.max(1, Math.round(el.height)) };
+  const maxOrder = groupOf(layers, "element").reduce((m, l) => Math.max(m, l.order), 0);
+  // Server id'si takrorlansa (masalan, redo'dan keyin yana bosilsa) — mahalliy id.
+  const id = el.id && !layers.some((l) => l.id === el.id) ? el.id : newLocalId("el");
+  return {
+    kind: "element",
+    id,
+    name: (el.name || "").trim() || fallbackName,
+    elementKind: el.kind === "product" ? "product" : "graphic",
+    url: el.url,
+    order: maxOrder + 1,
+    ...original,
+    rotation: 0,
+    flipX: false,
+    flipY: false,
+    original,
+    opacity: 1,
+    visible: true,
+    locked: false,
+    deleted: false,
+  };
 }
 
 /** Bir guruh (obyektlar yoki matnlar) pastdan yuqoriga. */

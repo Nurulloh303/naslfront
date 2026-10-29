@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import type { GenerationElement, GenerationTextLayer } from "../domain/types";
+import type { ExtractLayerPoint, ExtractLayerResponse, GenerationElement, GenerationTextLayer } from "../domain/types";
+import { ExtractLayerError } from "../services/createApi";
 import { useLanguage } from "../../../i18n/LanguageContext";
 import { downloadBlob } from "../../../app/downloadHelper";
 import {
   BACKGROUND_ID,
   buildEditorLayers,
+  extractedElementItem,
   firstLine,
   groupOf,
   moveToIndex,
@@ -40,6 +42,7 @@ import {
 import {
   boundingBox,
   drawGuides,
+  drawHighlight,
   drawOutline,
   drawSelection,
   handleCursor,
@@ -60,14 +63,14 @@ import {
   type Guide,
   type SnapTargets,
 } from "./magicLayers/geometry";
-import { AlphaHitCache, loadCorsImage, releaseImage, type LoadedImage } from "./magicLayers/loadImages";
+import { AlphaHitCache, loadCorsImage, loadCorsImages, releaseImage, type LoadedImage } from "./magicLayers/loadImages";
 import { useLayerHistory } from "./magicLayers/useLayerHistory";
 import { TextLayerProps } from "./magicLayers/TextLayerProps";
 import { BackgroundProps, ElementProps, LayersList } from "./magicLayers/LayerPanels";
 import { ConfirmDialog, DownloadReadySheet } from "./magicLayers/EditorDialogs";
 import "./MagicLayersEditor.css";
 
-/** Muharrir ochiladigan ma'lumot (API kontrakti v4). */
+/** Muharrir ochiladigan ma'lumot (API kontrakti v4/v5 — shakli bir xil). */
 export type MagicLayersSource = {
   /** Asl rasm — "Asl rasm" bilan solishtirish uchun. */
   baseUrl: string;
@@ -92,7 +95,12 @@ type Props = {
   onSave: (imageDataUrl: string) => Promise<boolean | void>;
   /** "Qayta ajratish" (force). */
   onReseparate?: () => Promise<MagicLayersSource>;
+  /** v5 "Bosib ajratish": rasm px'dagi nuqtadagi obyektni alohida qatlamga ajratish. */
+  onExtract?: (point: ExtractLayerPoint) => Promise<ExtractLayerResponse>;
 };
+
+type ToastTone = "info" | "success" | "error";
+type ToastState = { text: string; tone: ToastTone; key: number };
 
 type Interaction = {
   pointerId: number;
@@ -111,7 +119,7 @@ type Interaction = {
 
 type ImageLoadState = "loading" | "ok" | "error";
 
-const EMPTY_STATE: EditorState = { layers: [], background: { visible: true, color: null } };
+const EMPTY_STATE: EditorState = { layers: [], background: { visible: true, color: null, imageUrl: null } };
 const MIN_TEXT_WIDTH = 16;
 const MIN_FONT = 6;
 const MAX_FONT = 600;
@@ -119,6 +127,8 @@ const MIN_ELEMENT = 12;
 const DOUBLE_TAP_MS = 350;
 const OUTLINE_INTRO_MS = 2000;
 const SNAP_CSS_PX = 6;
+/** "Bosib ajratish": shundan ko'p surilsa — bosish emas (sudrash), so'rov yuborilmaydi. */
+const EXTRACT_TAP_SLOP_CSS = 10;
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -147,7 +157,7 @@ function insideLayer(layer: EditorLayer, pt: Point): boolean {
   return local.x >= rect.x && local.x <= rect.x + rect.width && local.y >= rect.y && local.y <= rect.y + rect.height;
 }
 
-export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onBack, onSave, onReseparate }: Props) {
+export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onBack, onSave, onReseparate, onExtract }: Props) {
   const { t } = useLanguage();
   const [scene, setScene] = useState<MagicLayersSource>(source);
   const W = Math.max(1, Math.round(scene.width || 1080));
@@ -167,9 +177,14 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
   const history = useLayerHistory<EditorState>(EMPTY_STATE);
   const { layers, background } = history.present;
   const { update, commitFrom, reset: resetHistory } = history;
+  /** Uzoq so'rovlar (bosib ajratish) tugaganda eng so'nggi holatni o'qish uchun. */
+  const presentRef = useRef(history.present);
+  presentRef.current = history.present;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  /** Qatlamlar ro'yxatidagi qatorga kursor keldi — kanvasda yoritiladi. */
+  const [listHoverId, setListHoverId] = useState<string | null>(null);
   const [cursor, setCursor] = useState("default");
   const [guides, setGuides] = useState<Guide[]>([]);
   const [outlinesOn, setOutlinesOn] = useState(true);
@@ -194,7 +209,20 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
   const [downloading, setDownloading] = useState(false);
   const [reseparating, setReseparating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToastState] = useState<ToastState | null>(null);
+  const setToast = useCallback((text: string | null, tone: ToastTone = "info") => {
+    setToastState(text ? { text, tone, key: Date.now() } : null);
+  }, []);
+
+  /* "Bosib ajratish" (v5) */
+  const [extractMode, setExtractMode] = useState(false);
+  /** Javob kutilayotgan nuqta (rasm px) — spinner shu yerda. */
+  const [extractPending, setExtractPending] = useState<Point | null>(null);
+  /** Kursor ostidagi nuqta (rasm px) — pulsatsiyalanuvchi nuqta. */
+  const [extractHover, setExtractHover] = useState<Point | null>(null);
+  const extractDown = useRef<{ pointerId: number; clientX: number; clientY: number } | null>(null);
+  const extractBusy = useRef(false);
+  const extractCount = useRef(0);
   const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; action: () => void } | null>(null);
   const [downloadSheet, setDownloadSheet] = useState<{ blob: Blob; filename: string } | null>(null);
 
@@ -246,14 +274,18 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
       graphicLabel: t("magicLayers.elementGraphic"),
       textLabel: t("magicLayers.textLayer"),
     });
-    const state: EditorState = { layers: items, background: { visible: true, color: null } };
+    const state: EditorState = { layers: items, background: { visible: true, color: null, imageUrl: null } };
     sourceState.current = state;
     resetHistory(state);
     setScene(next);
     setSelectedId(null);
     setHoverId(null);
+    setListHoverId(null);
     setEditingId(null);
     setGuides([]);
+    setExtractPending(null);
+    setExtractHover(null);
+    extractBusy.current = false;
     editingRef.current = null;
     pendingNewRef.current = null;
     const urls = requiredUrls(next);
@@ -280,12 +312,19 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
     return () => window.clearTimeout(timer);
   }, []);
 
-  const required = useMemo(() => requiredUrls(scene), [scene]);
+  /** Joriy fon rasmi: "Bosib ajratish"dan keyin — server qaytargan yangi fon (tarixda). */
+  const bgUrl = background.imageUrl ?? scene.backgroundUrl;
+  const required = useMemo(() => {
+    const urls = new Set(requiredUrls(scene));
+    if (background.imageUrl) urls.add(background.imageUrl);
+    for (const layer of layers) if (layer.kind === "element" && !layer.deleted && layer.url) urls.add(layer.url);
+    return [...urls];
+  }, [background.imageUrl, layers, scene]);
   const failedUrls = required.filter((u) => loadStates[u] === "error");
   const pendingUrls = required.filter((u) => !loadStates[u] || loadStates[u] === "loading");
-  const backgroundImage = images[scene.backgroundUrl];
+  const backgroundImage = images[bgUrl];
   const baseImage = images[scene.baseUrl];
-  const bgLoading = !backgroundImage && loadStates[scene.backgroundUrl] !== "error";
+  const bgLoading = !backgroundImage && loadStates[bgUrl] !== "error";
   const imagesReady = pendingUrls.length === 0 && failedUrls.length === 0;
 
   const retryFailed = () => {
@@ -326,7 +365,7 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
 
   useEffect(() => {
     if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 2600);
+    const timer = window.setTimeout(() => setToastState(null), toast.tone === "error" ? 3600 : 2600);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
@@ -350,12 +389,14 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
     if (editingId) return;
     for (const layer of layers) {
       if (layer.deleted || !layer.visible || layer.id === activeLayer?.id) continue;
-      if (layer.id === hoverId) drawOutline(ctx, layer, unit, false);
+      if (layer.id === hoverId && !extractMode) drawOutline(ctx, layer, unit, false);
       else if (outlinesOn) drawOutline(ctx, layer, unit);
     }
     drawGuides(ctx, guides, W, H, unit);
+    const listHover = listHoverId ? layers.find((l) => l.id === listHoverId && !l.deleted && l.visible) : null;
+    if (listHover && listHover.id !== activeLayer?.id) drawHighlight(ctx, listHover, unit);
     if (activeLayer && activeLayer.visible) drawSelection(ctx, activeLayer, unit, handleRadiusCss, rotOffsetCss);
-  }, [activeLayer, background, backgroundImage, baseImage, comparing, editingId, fontsTick, guides, H, handleRadiusCss, hoverId, images, layers, outlinesOn, rotOffsetCss, unit, W]);
+  }, [activeLayer, background, backgroundImage, baseImage, comparing, editingId, extractMode, fontsTick, guides, H, handleRadiusCss, hoverId, images, layers, listHoverId, outlinesOn, rotOffsetCss, unit, W]);
 
   /* ---------------------------------------------------------------- */
   /* Qatlam amallari                                                   */
@@ -394,6 +435,14 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
 
   const toggleVisibility = (id: string) => {
     updateLayers((prev) => prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l)));
+  };
+
+  /** Guruhdagi "Hammasini ko'rsatish / yashirish" — bitta undo qadami. */
+  const setLayersVisible = (ids: string[], visible: boolean) => {
+    const set = new Set(ids);
+    updateLayers((prev) => (prev.some((l) => set.has(l.id) && l.visible !== visible)
+      ? prev.map((l) => (set.has(l.id) && l.visible !== visible ? { ...l, visible } : l))
+      : prev));
   };
 
   const toggleLock = (id: string) => {
@@ -596,6 +645,15 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.button !== 0 && e.pointerType === "mouse") return;
     if (comparing) return;
+    if (extractMode) {
+      // "Bosib ajratish": bosish qatlamni tanlamaydi/surmaydi — faqat nuqtani yuboradi (qo'yib yuborilganda).
+      if (editingRef.current) finishEditing("commit");
+      if (extractDown.current) return; // ikkinchi barmoq — e'tiborsiz
+      e.preventDefault();
+      extractDown.current = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY };
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      return;
+    }
     const pt = getCanvasCoords(e.clientX, e.clientY);
     pointers.current.set(e.pointerId, pt);
     if (editingRef.current) {
@@ -664,6 +722,10 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const pt = getCanvasCoords(e.clientX, e.clientY);
+    if (extractMode) {
+      if (e.pointerType !== "touch") setExtractHover(pt);
+      return;
+    }
     if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, pt);
     const it = interaction.current;
     if (!it) {
@@ -760,6 +822,14 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const down = extractDown.current;
+    if (down && down.pointerId === e.pointerId) {
+      extractDown.current = null;
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      const tap = e.type !== "pointercancel" && Math.hypot(e.clientX - down.clientX, e.clientY - down.clientY) <= EXTRACT_TAP_SLOP_CSS;
+      if (tap && extractMode) void runExtract(getCanvasCoords(e.clientX, e.clientY), e.shiftKey);
+      return;
+    }
     pointers.current.delete(e.pointerId);
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     if (pendingDeselect.current && pointers.current.size === 0) {
@@ -774,6 +844,86 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
     setGuides([]);
     if (it.moved) commitFrom(it.snapshot);
     if (e.pointerType === "mouse") updateHover(getCanvasCoords(e.clientX, e.clientY));
+  };
+
+  /* ---------------------------------------------------------------- */
+  /* "Bosib ajratish" (v5)                                             */
+  /* ---------------------------------------------------------------- */
+
+  const setExtractModeOn = (on: boolean) => {
+    if (on && editingRef.current) finishEditing("commit");
+    setExtractMode(on);
+    setExtractHover(null);
+    setHoverId(null);
+    setGuides([]);
+    extractDown.current = null;
+    if (on) setCursor("crosshair");
+  };
+
+  const extractErrorText = (reason: unknown): string => {
+    if (reason instanceof ExtractLayerError && reason.status === 422) {
+      if (reason.code === "NOTHING_FOUND") return t("magicLayers.extractNothing");
+      if (reason.code === "TOO_LARGE") return t("magicLayers.extractTooLarge");
+    }
+    const message = reason instanceof Error && reason.message ? reason.message : t("magicLayers.exportFailed");
+    return t("magicLayers.extractFailed", { message });
+  };
+
+  /**
+   * Nuqtani serverga yuboradi; javobdagi yangi obyekt va yangi fon CORS-xavfsiz
+   * yuklangach — bitta tarix qadamida sahnaga qo'shiladi. Kutish davomida boshqa
+   * ajratish bosishlari bloklanadi (qolgan tahrirlash ishlayveradi).
+   */
+  const runExtract = async (pt: Point, stay: boolean) => {
+    if (!onExtract || extractBusy.current) return;
+    const point = { x: Math.max(0, Math.min(W - 1, Math.round(pt.x))), y: Math.max(0, Math.min(H - 1, Math.round(pt.y))) };
+    const token = loadToken.current;
+    extractBusy.current = true;
+    setExtractPending(point);
+    setExtractHover(null);
+    try {
+      const res = await onExtract(point);
+      const urls = [...new Set([res.element.url, res.backgroundUrl])].filter((u) => !imagesRef.current[u]);
+      const loaded = await loadCorsImages(urls);
+      if (token !== loadToken.current) {
+        for (const image of Object.values(loaded)) releaseImage(image);
+        return;
+      }
+      imagesRef.current = { ...imagesRef.current, ...loaded };
+      setImages(imagesRef.current);
+      setLoadStates((current) => ({ ...current, ...Object.fromEntries(urls.map((u) => [u, "ok" as ImageLoadState])) }));
+
+      // Davom etayotgan sudrash bo'lsa — avval uni o'z qadami sifatida yozamiz.
+      const it = interaction.current;
+      if (it) {
+        interaction.current = null;
+        setGuides([]);
+        if (it.moved) commitFrom(it.snapshot);
+      }
+      if (editingRef.current) finishEditing("commit");
+
+      extractCount.current += 1;
+      const item = extractedElementItem(res.element, presentRef.current.layers, t("magicLayers.extractedName", { index: extractCount.current }));
+      // Bitta undo qadami: undo oldingi fon rasmini qaytaradi va obyektni olib tashlaydi.
+      // Foydalanuvchining fon rangi (background.color) va ko'rinishi saqlanadi.
+      // Eslatma: server o'zida yangi versiyani (obyekt + yangi fon) saqlab qoladi — undo
+      // faqat muharrirdagi holatni qaytaradi; bu kutilgan xatti-harakat.
+      update((s) => {
+        const order = s.layers.filter((l) => l.kind === "element").reduce((m, l) => Math.max(m, l.order), 0) + 1;
+        return { layers: [...s.layers, { ...item, order }], background: { ...s.background, imageUrl: res.backgroundUrl } };
+      });
+      setSelectedId(item.id);
+      setToast(t("magicLayers.extractDone"), "success");
+      if (!stay) setExtractMode(false);
+    } catch (reason) {
+      if (token !== loadToken.current) return;
+      setToast(extractErrorText(reason), "error");
+    } finally {
+      if (token === loadToken.current) {
+        extractBusy.current = false;
+        setExtractPending(null);
+      }
+    }
   };
 
   /* ---------------------------------------------------------------- */
@@ -919,6 +1069,11 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
       history.redo();
       return;
     }
+    if (e.key === "Escape" && extractMode) {
+      e.preventDefault();
+      setExtractModeOn(false);
+      return;
+    }
     if (busy) return;
     if (e.key === "Escape") {
       if (selectedId) { e.preventDefault(); setSelectedId(null); }
@@ -1004,11 +1159,12 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
   const thumbs = useMemo(() => {
     const out: Record<string, string | undefined> = {};
     for (const [url, image] of Object.entries(images)) out[url] = image?.objectUrl;
-    out.__background = images[scene.backgroundUrl]?.objectUrl;
+    out.__background = images[bgUrl]?.objectUrl;
     return out;
-  }, [images, scene.backgroundUrl]);
+  }, [images, bgUrl]);
   const failedMap = useMemo(() => Object.fromEntries(failedUrls.map((u) => [u, true])), [failedUrls.join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
   const position = activeLayer ? orderPosition(layers, activeLayer.id) : { isTop: true, isBottom: true };
+  // "Bosib ajratish" maslahati kanvas ustidagi panelda — bu yerda matn o'zgarmaydi (toolbar sakramasin).
   const hint = editingId ? t("magicLayers.inlineHint") : activeLayer?.kind === "element" ? t("magicLayers.elementHint") : t("magicLayers.dragHint");
 
   const stopCompare = () => setComparing(false);
@@ -1078,6 +1234,19 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
             >
               <span aria-hidden="true">▢</span> <span className="magic-btn-label">{t("magicLayers.showTexts")}</span>
             </button>
+            {onExtract ? (
+              <button
+                type="button"
+                className={`magic-btn magic-btn-secondary magic-btn-sm magic-toggle magic-extract-toggle ${extractMode ? "is-on" : ""} ${extractPending ? "is-busy" : ""}`}
+                onClick={() => setExtractModeOn(!extractMode)}
+                disabled={reseparating || comparing}
+                aria-pressed={extractMode}
+                title={t("magicLayers.extractToolTitle")}
+                data-testid="extract-toggle"
+              >
+                <WandIcon /> <span className="magic-btn-label-sm">{t("magicLayers.extractTool")}</span>
+              </button>
+            ) : null}
             <button
               type="button"
               className={`magic-btn magic-btn-secondary magic-btn-sm magic-compare ${comparing ? "is-on" : ""}`}
@@ -1119,17 +1288,39 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
               <canvas
                 ref={canvasRef}
                 className="magic-canvas-element"
-                style={{ cursor }}
+                style={{ cursor: extractMode ? (extractPending ? "progress" : "crosshair") : cursor }}
+                data-extract={extractMode ? "on" : undefined}
                 width={W}
                 height={H}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
-                onPointerLeave={() => { if (!interaction.current) setHoverId(null); }}
+                onPointerLeave={() => { if (!interaction.current) setHoverId(null); setExtractHover(null); }}
                 onContextMenu={(e) => e.preventDefault()}
               />
               {comparing ? <span className="magic-compare-badge">{t("magicLayers.compareBadge")}</span> : null}
+              {extractMode && extractHover && !extractPending && !comparing ? (
+                <span className="magic-extract-dot" aria-hidden="true" style={{ left: `${(extractHover.x / W) * 100}%`, top: `${(extractHover.y / H) * 100}%` }} />
+              ) : null}
+              {extractPending ? (
+                <span className="magic-extract-pending" data-testid="extract-pending" style={{ left: `${(extractPending.x / W) * 100}%`, top: `${(extractPending.y / H) * 100}%` }}>
+                  <span className="magic-extract-ring" aria-hidden="true" />
+                  <span className="magic-extract-label" role="status">{t("magicLayers.extracting")}</span>
+                </span>
+              ) : null}
+              {(extractMode || extractPending) && !comparing ? (
+                <div className={`magic-extract-bar ${extractPending ? "is-busy" : ""}`} data-testid="extract-bar">
+                  <WandIcon />
+                  <span className="magic-extract-bar-text">
+                    <b>{extractPending ? t("magicLayers.extracting") : t("magicLayers.extractHint")}</b>
+                    {!coarsePointer && extractMode ? <small>{t("magicLayers.extractHintShift")}</small> : null}
+                  </span>
+                  {extractMode ? (
+                    <button type="button" className="magic-mini-btn" onClick={() => setExtractModeOn(false)} aria-label={t("magicLayers.close")}>✕</button>
+                  ) : null}
+                </div>
+              ) : null}
               {editingLayer && textareaStyle ? (
                 <textarea
                   ref={textareaRef}
@@ -1222,8 +1413,9 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
               failed={failedMap}
               onSelect={selectFromList}
               onEdit={startEditing}
-              onHover={setHoverId}
+              onHover={setListHoverId}
               onToggleVisible={toggleVisibility}
+              onSetVisible={setLayersVisible}
               onToggleLock={toggleLock}
               onDelete={deleteLayer}
               onMoveToIndex={moveLayerToIndex}
@@ -1239,7 +1431,7 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
         </aside>
       </div>
 
-      {toast ? <div className="magic-toast" role="status">{toast}</div> : null}
+      {toast ? <div key={toast.key} className={`magic-toast is-${toast.tone}`} role={toast.tone === "error" ? "alert" : "status"}>{toast.text}</div> : null}
 
       {confirm ? (
         <ConfirmDialog
@@ -1257,4 +1449,15 @@ export function MagicLayersEditor({ jobId: _jobId, variant, source, onClose, onB
       ) : null}
     </div>
   , document.body);
+}
+
+/** "Bosib ajratish" belgisi: sehrli tayoqcha + uchqunlar. */
+function WandIcon() {
+  return (
+    <svg className="magic-wand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 20 15 9" />
+      <path d="m14 6 1.2-2.6L16.4 6 19 7.2 16.4 8.4 15.2 11 14 8.4 11.4 7.2Z" fill="currentColor" stroke="none" />
+      <path d="M19 13v3M17.5 14.5h3M8 3v2M7 4h2" />
+    </svg>
+  );
 }

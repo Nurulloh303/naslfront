@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import { marketplacePresets } from "../domain/marketplacePresets";
-import { defaultBrief, defaultSettings, type CreateFlowState, type GenerationSettings, type ProductAsset, type ProductBrief, type Quote } from "../domain/types";
+import { defaultBrief, defaultSettings, type CreateFlowState, type ExtractLayerPoint, type ExtractLayerResponse, type GenerationSettings, type ProductAsset, type ProductBrief, type Quote } from "../domain/types";
 import { createP0Api, type SeparateLayersOptions } from "../services/createApi";
 
 type Action =
@@ -81,6 +81,9 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
   const api = useMemo(() => createP0Api(), []);
   const generationInFlight = useRef(false);
   const stopWatch = useRef<null | (() => void)>(null);
+  /** Uzoq so'rovlar (bosib ajratish) tugaganda eng so'nggi vazifa holatini yangilash uchun. */
+  const latestJob = useRef(state.job);
+  latestJob.current = state.job;
   const callbacks = useRef({ onBalanceChange, onJobSettled });
   callbacks.current = { onBalanceChange, onJobSettled };
   // Решение "нужен ли тавсиф" принимается на шаге настроек, а не в момент,
@@ -366,8 +369,27 @@ export function useCreateFlow({ initialBalance, onBalanceChange, onJobSettled }:
     }
   };
 
+  /**
+   * Magic Layers v5 "Bosib ajratish". Xatolar muharrirning o'zida (toast) ko'rsatiladi —
+   * bu yerda notice chiqarilmaydi. Muvaffaqiyatda natijadagi qatlamlar ham yangilanadi
+   * (muharrir qayta ochilganda yangi obyekt va fon ko'rinsin — server ham shu holatni saqlaydi).
+   */
+  const extractLayer = async (variant: number, point: ExtractLayerPoint): Promise<ExtractLayerResponse> => {
+    const jobId = state.job.id;
+    if (!jobId) throw new Error("Loyiha topilmadi");
+    const result = await api.extractLayer(jobId, variant, point);
+    const job = latestJob.current;
+    if (job.id !== jobId) return result;
+    const updatedResults = job.results.map((r, idx) => (idx + 1 === variant
+      ? { ...r, backgroundUrl: result.backgroundUrl, elements: [...(r.elements ?? []).filter((e) => e.id !== result.element.id), result.element] }
+      : r));
+    dispatch({ type: "JOB_UPDATE", job: { ...job, results: updatedResults } });
+    return result;
+  };
+
   return {
     state,
+    extractLayer,
     setAssets,
     setPrimaryAsset,
     setMarketplace,

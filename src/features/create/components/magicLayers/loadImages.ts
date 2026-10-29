@@ -78,6 +78,23 @@ export async function loadCorsImage(url: string, signal?: AbortSignal): Promise<
   }
 }
 
+/**
+ * Bir nechta rasmni "hammasi yoki hech biri" tarzida yuklaydi ("Bosib ajratish":
+ * yangi obyekt + yangi fon birga paydo bo'lishi kerak). Biri yuklanmasa —
+ * yuklanganlari bo'shatiladi va xato qaytadi.
+ */
+export async function loadCorsImages(urls: string[], signal?: AbortSignal): Promise<Record<string, LoadedImage>> {
+  const settled = await Promise.allSettled(urls.map((url) => loadCorsImage(url, signal)));
+  const failed = settled.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (failed) {
+    for (const r of settled) if (r.status === "fulfilled") releaseImage(r.value);
+    throw failed.reason instanceof Error ? failed.reason : new Error("LOAD_FAILED");
+  }
+  const out: Record<string, LoadedImage> = {};
+  settled.forEach((r, i) => { if (r.status === "fulfilled") out[urls[i]] = r.value; });
+  return out;
+}
+
 export function releaseImage(image: LoadedImage | undefined): void {
   if (image) URL.revokeObjectURL(image.objectUrl);
 }
