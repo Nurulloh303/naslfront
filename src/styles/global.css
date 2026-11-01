@@ -2726,3 +2726,5 @@ small.field-error { padding: 6px 10px; font-size: 13px; }
 .admin-table .textbtn, .admin-section-head .textbtn, .admin-owner-field .textbtn { padding: 4px 0; border: 0; background: transparent; color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; }
 .admin-table .textbtn:hover, .admin-section-head .textbtn:hover, .admin-owner-field .textbtn:hover { text-decoration: underline; }
 .admin-table .textbtn.is-danger { color: var(--danger-text); font-weight: 600; }
+.pages-menu button { flex-wrap: wrap; }
+.pages-menu .pages-roles { flex-basis: 100%; font-size: 11px; line-height: 1.35; color: var(--text-secondary); opacity: .85; text-align: left; margin-top: 2px; }

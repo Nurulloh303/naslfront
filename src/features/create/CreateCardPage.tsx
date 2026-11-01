@@ -50,6 +50,21 @@ function ResultShell({ children }: { children: ReactNode }) {
   return <aside className="reference-results"><div className="reference-card result-card-shell">{children}</div></aside>;
 }
 
+/**
+ * Ko'p sahifali to'plamda har bir sahifaning vazifasi — backend
+ * generation/prompts.py PAGE_ROLE_ORDER bilan bir xil bo'lishi shart.
+ */
+const PAGE_ROLE_ORDER: Record<number, string[]> = {
+  1: ["cover"],
+  2: ["cover", "lifestyle"],
+  3: ["cover", "lifestyle", "features"],
+  4: ["cover", "lifestyle", "scenarios", "features"],
+  5: ["cover", "lifestyle", "scenarios", "features", "details"],
+};
+function pageRolesFor(pages: number): string[] {
+  return PAGE_ROLE_ORDER[Math.max(1, Math.min(5, pages))] ?? PAGE_ROLE_ORDER[1];
+}
+
 export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: CabinetRoute) => void; onLogout?: () => void }) {
   const { t, dict, language: uiLanguage } = useLanguage();
   const { account, setBalance, refresh } = useAccount();
@@ -296,13 +311,13 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
               </>}
             </div>
             {variantsOpen && contentMode !== "marketplacePackage" && <div className="variants-menu" role="menu" aria-label={t("create.variantsMenu")}><p className="variants-hint">{t("create.variantsHint")}<Hint text={t("hints.variants")} label={t("hints.aria")} /></p>{([1, 2, 4] as const).map((variants) => <button key={variants} type="button" aria-current={state.settings.variants === variants ? "true" : undefined} onClick={() => { flow.updateSettings({ variants }); setVariantsOpen(false); }}>x{variants} <span>{t("create.variantsLabel")}</span></button>)}</div>}
-            {pagesOpen && contentMode !== "marketplacePackage" && <div className="variants-menu pages-menu" role="menu" aria-label={t("create.pagesMenu")}><p className="variants-hint">{t("create.pagesHint", { price: account?.pricing.perImage ?? 1 })}<Hint text={t("hints.pages")} label={t("hints.aria")} /></p>{([1, 2, 3, 4, 5] as const).map((pages) => <button key={pages} type="button" aria-current={state.settings.pages === pages ? "true" : undefined} onClick={() => { flow.updateSettings({ pages }); setPagesOpen(false); if (pages > 1) setPageFocusOpen(true); }}>{pages} <span>{t("create.pagesLabel")}</span></button>)}</div>}
+            {pagesOpen && contentMode !== "marketplacePackage" && <div className="variants-menu pages-menu" role="menu" aria-label={t("create.pagesMenu")}><p className="variants-hint">{t("create.pagesHint", { price: account?.pricing.perImage ?? 1 })}<Hint text={t("hints.pages")} label={t("hints.aria")} /></p>{([1, 2, 3, 4, 5] as const).map((pages) => <button key={pages} type="button" aria-current={state.settings.pages === pages ? "true" : undefined} onClick={() => { flow.updateSettings({ pages }); setPagesOpen(false); if (pages > 1) setPageFocusOpen(true); }}>{pages} <span>{t("create.pagesLabel")}</span><small className="pages-roles">{pageRolesFor(pages).map((role) => t(`create.pageRoles.${role}`)).join(" · ")}</small></button>)}</div>}
             {contentMode !== "marketplacePackage" && state.settings.pages > 1 && <div className="pages-advanced">
               <button type="button" aria-expanded={pageFocusOpen} onClick={() => setPageFocusOpen((open) => !open)}>{t("create.pagesAdvanced")} <span>{pageFocusOpen ? "⌃" : "⌄"}</span></button>
               {pageFocusOpen && <div className="pages-advanced-panel">
                 <p className="field-help">{t("create.pagesAdvancedHint")}</p>
                 {Array.from({ length: state.settings.pages }, (_, index) => <label key={index}>
-                  <span>{t("create.pageNumber", { n: index + 1 })}</span>
+                  <span>{t("create.pageNumber", { n: index + 1 })} · {t(`create.pageRoles.${pageRolesFor(state.settings.pages)[index]}`)}</span>
                   <input
                     disabled={disabled || isRunning}
                     maxLength={200}
