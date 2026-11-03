@@ -2728,3 +2728,17 @@ small.field-error { padding: 6px 10px; font-size: 13px; }
 .admin-table .textbtn.is-danger { color: var(--danger-text); font-weight: 600; }
 .pages-menu button { flex-wrap: wrap; }
 .pages-menu .pages-roles { flex-basis: 100%; font-size: 11px; line-height: 1.35; color: var(--text-secondary); opacity: .85; text-align: left; margin-top: 2px; }
+
+/* Bekor qilish — progress qatorida, doim ko'rinadigan joyda (avval animatsiya ostida yo'qolib qolardi). */
+.job-top { flex-wrap: wrap; row-gap: 8px; }
+.job-top > b + span { margin-left: auto; color: var(--accent); font-weight: 600; }
+.job-cancel-top span { margin-left: 0 !important; color: inherit !important; font-weight: inherit !important; }
+.job-cancel-top {
+  margin-left: 6px; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 34px; padding: 6px 14px; border-radius: 999px;
+  border: 1px solid rgba(255, 92, 92, .55); background: rgba(255, 92, 92, .12);
+  color: #ff8a8a; font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.job-cancel-top:hover:not(:disabled) { background: rgba(255, 92, 92, .22); border-color: #ff6b6b; color: #ffb3b3; }
+.job-cancel-top:disabled { opacity: .55; cursor: progress; }
