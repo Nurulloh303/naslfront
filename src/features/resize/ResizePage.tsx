@@ -11,12 +11,13 @@ import "./resize.css";
 /**
  * «O'lchamni moslash» — bitta rasmni Uzum formatiga (1080×1440, 3:4) keltirish.
  *
- * Ketma-ketlik: rasm → usul (jonli prevyu bilan) → 1 token → natija.
+ * Ketma-ketlik: rasm → usul (jonli prevyu bilan) → bepul moslash → natija.
  * Prevyular brauzerda chiziladi va taxminiy: ular usulni tanlashga yordam
  * beradi, yakuniy rasmni esa server chizadi.
  */
 
-const COST = 1;
+/** O'lchamni moslash bepul (backend: RESIZE_TOKENS=0). Pullik qilinsa — shu yerni ham 1 qiling. */
+const COST = 0;
 const MAX_BYTES = 15 * 1024 * 1024;
 const ACCEPT = ["image/jpeg", "image/png", "image/webp"];
 const MODES: ResizeMode[] = ["ai", "blur", "color", "crop"];
@@ -297,12 +298,12 @@ export function ResizePage({ onNavigate, onLogout }: { onNavigate: (route: Cabin
 
             <div className="rz-cta">
               {enough
-                ? <button type="button" className="rz-submit" onClick={() => void submit()}>{t("resize.submit")} · <b>{t("resize.cost", { n: COST })}</b></button>
+                ? <button type="button" className="rz-submit" onClick={() => void submit()}>{t("resize.submit")} · <b>{COST === 0 ? t("resize.free") : t("resize.cost", { n: COST })}</b></button>
                 : <>
                   <p className="rz-warn">{t("resize.noTokens")}</p>
                   <button type="button" className="rz-submit" onClick={() => onNavigate("billing")}>{t("resize.buy")}</button>
                 </>}
-              <small>{t("resize.balance", { n: balance })}</small>
+              {COST > 0 && <small>{t("resize.balance", { n: balance })}</small>}
             </div>
           </>}
 
@@ -331,7 +332,7 @@ export function ResizePage({ onNavigate, onLogout }: { onNavigate: (route: Cabin
           {phase === "failed" && <div className="rz-failed" role="alert">
             <h2 className="rz-title">{t("resize.failedTitle")}</h2>
             <p>{job?.error || job?.message || t("resize.errors.generic")}</p>
-            <p className="rz-muted">{t("resize.refundNote")}</p>
+            {COST > 0 && <p className="rz-muted">{t("resize.refundNote")}</p>}
             <div className="rz-result-actions">
               <button type="button" className="button primary" onClick={backToModes}>{t("resize.retry")}</button>
               <button type="button" className="button secondary" onClick={startOver}>{t("resize.newImage")}</button>
