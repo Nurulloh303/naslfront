@@ -41,6 +41,8 @@ export type AccountProject = {
   previewUrl?: string | null;
   resultCount?: number;
   available?: boolean;
+  /** "resize" — O'lchamni moslash vazifasi; boshqalari — oddiy kartalar. */
+  contentType?: string;
 };
 
 /**
@@ -49,7 +51,6 @@ export type AccountProject = {
  */
 export type ProjectFolder = AccountProject & {
   summary?: string;
-  contentType?: string;
   sourceUrl: string | null;
   archiveUrl: string;
   brief: { title: string; subtitle: string; category: string; benefits: string[] } | null;

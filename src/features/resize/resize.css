@@ -1,0 +1,239 @@
+/* ============================================================
+   O'lchamni moslash (#resize)
+   Asosiy g'oya: sahna — 3:4 ramka, tepada va o'ngda o'lcham
+   chizg'ichlari (1080 / 1440), xuddi texnik chizmadagidek.
+   Qolgan hamma narsa — mavjud token tizimi, sokin.
+   ============================================================ */
+
+.rz-page { --rz-stage: 400px; }
+
+/* ---------- yuklash ---------- */
+.rz-drop {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 32px;
+  min-height: 300px; padding: 40px 48px;
+  border: 2px dashed var(--border-strong); border-radius: var(--radius-panel);
+  background: var(--dropzone-fill); color: var(--text-primary);
+  cursor: pointer; transition: border-color .18s ease, background-color .18s ease;
+}
+.rz-drop:hover, .rz-drop.is-dragging { border-color: var(--accent); background: var(--accent-wash); }
+.rz-drop:focus-visible { outline: 3px solid var(--accent-border-alpha); outline-offset: 3px; }
+.rz-drop h2 { margin: 0 0 6px; font-family: var(--font-display); font-size: 24px; line-height: 1.25; font-weight: 600; letter-spacing: -.01em; }
+.rz-drop p { max-width: 460px; margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+.rz-drop-button { display: inline-flex; align-items: center; margin-top: 20px; min-height: 42px; padding: 0 18px; }
+
+.rz-glyph { width: 120px; height: 140px; overflow: visible; }
+.rz-glyph rect { fill: none; stroke-width: 2; }
+.rz-glyph-src { stroke: var(--text-tertiary); stroke-dasharray: 4 4; }
+.rz-glyph-dst { stroke: var(--accent); fill: var(--accent-wash) !important; }
+.rz-glyph text { fill: var(--accent); font: 700 11px var(--font-display); }
+.rz-drop:hover .rz-glyph-dst, .rz-drop.is-dragging .rz-glyph-dst { animation: rzGlyph 1.6s var(--ease) infinite alternate; }
+@keyframes rzGlyph { to { transform: translate(-6px, 4px); } }
+
+/* ---------- ikki ustun ---------- */
+.rz-layout {
+  display: grid; grid-template-columns: var(--rz-stage) minmax(0, 1fr);
+  align-items: start; gap: 48px;
+}
+.rz-stage-col { position: sticky; top: 88px; padding: 22px 30px 0 0; scroll-margin-top: 72px; }
+
+/* Sahna: 3:4 ramka + chizg'ichlar */
+.rz-stage { position: relative; }
+.rz-ruler { position: absolute; color: var(--text-tertiary); font: 600 11px/1 var(--font-display); letter-spacing: .04em; pointer-events: none; }
+.rz-ruler span { position: absolute; padding: 0 6px; background: var(--app-bg); }
+.rz-ruler-x { left: 0; right: 0; top: -14px; height: 1px; background: var(--border-strong); }
+.rz-ruler-x::before, .rz-ruler-x::after { content: ""; position: absolute; top: -4px; width: 1px; height: 9px; background: var(--border-strong); }
+.rz-ruler-x::before { left: 0; } .rz-ruler-x::after { right: 0; }
+.rz-ruler-x span { left: 50%; top: -5px; transform: translateX(-50%); }
+.rz-ruler-y { top: 0; bottom: 0; right: -16px; width: 1px; background: var(--border-strong); }
+.rz-ruler-y::before, .rz-ruler-y::after { content: ""; position: absolute; left: -4px; width: 9px; height: 1px; background: var(--border-strong); }
+.rz-ruler-y::before { top: 0; } .rz-ruler-y::after { bottom: 0; }
+.rz-ruler-y span { top: 50%; left: -1px; transform: translate(-50%, -50%) rotate(90deg); padding: 3px 6px; }
+
+.rz-big, .rz-compare {
+  position: relative; overflow: hidden; aspect-ratio: 3 / 4;
+  border-radius: 6px; background: var(--surface-control);
+  box-shadow: 0 0 0 1px var(--border-subtle), 0 24px 48px -28px var(--shadow-strong);
+}
+.rz-canvas { display: block; width: 100%; height: auto; }
+.rz-big.is-croppable { cursor: grab; touch-action: none; }
+.rz-big.is-croppable:active { cursor: grabbing; }
+.rz-big:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.rz-grab {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%;
+  color: #fff; background: rgba(0, 0, 0, .42); font-size: 20px; pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .6);
+}
+.rz-hint { margin: 14px 0 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+
+/* AI to'ldiradigan chetlar — yaltirash */
+.rz-ai { position: absolute; inset: 0; pointer-events: none; }
+.rz-ai i {
+  position: absolute; display: grid; place-items: center; overflow: hidden;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .55) 50%, transparent 70%) 0 0 / 250% 100%;
+  animation: rzShimmer 2.2s linear infinite;
+}
+:root[data-theme="dark"] .rz-ai i { background-image: linear-gradient(110deg, transparent 30%, rgba(0, 246, 255, .28) 50%, transparent 70%); }
+.rz-ai em {
+  padding: 4px 9px; border-radius: 999px; font-style: normal; font-size: 12px; font-weight: 700;
+  color: var(--accent-ink); background: var(--accent); white-space: nowrap;
+}
+@keyframes rzShimmer { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+
+/* Ishlov paytida — sahna bo'ylab yuruvchi chiziq */
+.rz-scan { position: absolute; inset: 0; overflow: hidden; border-radius: 6px; pointer-events: none; }
+.rz-scan::before { content: ""; position: absolute; inset: 0; background: rgba(0, 0, 0, .18); }
+.rz-scan i {
+  position: absolute; left: 0; right: 0; height: 28%;
+  background: linear-gradient(to bottom, transparent, var(--accent-border-alpha) 85%, var(--accent));
+  animation: rzScan 1.8s var(--ease) infinite;
+}
+@keyframes rzScan { from { top: -30%; } to { top: 100%; } }
+
+/* ---------- o'ng ustun ---------- */
+.rz-side { display: grid; gap: 16px; min-width: 0; }
+.rz-source {
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 10px 14px 10px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-control);
+  background: var(--surface-card);
+}
+.rz-source img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: var(--surface-control); }
+.rz-source div { display: grid; gap: 2px; min-width: 0; }
+.rz-source small { color: var(--text-secondary); font-size: 12px; }
+.rz-source b { color: var(--text-primary); font: 600 15px/1.3 var(--font-display); font-variant-numeric: tabular-nums; }
+.rz-link { border: 0; padding: 6px 2px; background: none; color: var(--accent-soft-text); font-size: 13px; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+.rz-note { margin: 0; padding: 10px 14px; border-radius: var(--radius-control); color: var(--text-primary); background: var(--surface-control); font-size: 13px; line-height: 1.5; }
+.rz-note.is-accent { color: var(--accent-soft-text); background: var(--accent-wash); }
+
+.rz-title { margin: 8px 0 0; color: var(--text-primary); font: 600 18px/1.3 var(--font-display); letter-spacing: -.01em; }
+
+.rz-modes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.rz-mode {
+  display: grid; align-content: start; gap: 8px; padding: 8px 8px 10px; text-align: left;
+  border: 1px solid var(--border-subtle); border-radius: 14px; background: var(--surface-card);
+  color: var(--text-primary); cursor: pointer; transition: border-color .15s ease, transform .15s ease;
+}
+.rz-mode:hover { border-color: var(--border-strong); }
+.rz-mode[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--surface-elevated); }
+.rz-mode:focus-visible { outline: 3px solid var(--accent-border-alpha); outline-offset: 2px; }
+.rz-mode-canvas { position: relative; display: block; overflow: hidden; border-radius: 6px; background: var(--surface-control); box-shadow: 0 0 0 1px var(--border-subtle); }
+.rz-mode-text { display: grid; gap: 4px; }
+.rz-mode-text b { font-size: 13px; line-height: 1.3; font-weight: 650; }
+.rz-mode-text em { justify-self: start; padding: 2px 7px; border-radius: 999px; font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent-ink); background: var(--accent); }
+.rz-mode-desc { margin: -4px 0 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+
+.rz-colors { display: grid; gap: 10px; }
+.rz-label { color: var(--text-primary); font-size: 13px; font-weight: 650; }
+.rz-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.rz-swatch {
+  position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 12px 0 6px;
+  border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--surface-card);
+  color: var(--text-primary); font-size: 13px; cursor: pointer;
+}
+.rz-swatch i { width: 26px; height: 26px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(128, 128, 128, .45); }
+.rz-swatch i.is-auto { box-shadow: inset 0 0 0 1px rgba(128, 128, 128, .45), 0 0 0 2px var(--surface-card), 0 0 0 3px var(--border-strong); }
+.rz-swatch i.is-rainbow:not([style*="background"]) { background: conic-gradient(#ff4d4d, #ffd23f, #3ddc84, #3fa9ff, #b45cff, #ff4d4d); }
+.rz-swatch[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.rz-swatch input[type="color"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.rz-swatch:has(input:focus-visible), .rz-swatch:focus-visible { outline: 3px solid var(--accent-border-alpha); outline-offset: 2px; }
+.rz-muted { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+
+.rz-cta { display: grid; gap: 8px; margin-top: 4px; }
+.rz-cta small { color: var(--text-secondary); font-size: 12px; text-align: center; }
+.rz-submit {
+  min-height: 56px; width: 100%; border: 0; border-radius: 14px; padding: 0 20px;
+  color: var(--accent-ink); background: var(--accent); font: 650 17px/1 var(--font-display); cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.rz-submit b { font-weight: 700; }
+.rz-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 16px 34px -12px var(--secondary-accent-glow); }
+.rz-submit:focus-visible { outline: 3px solid var(--accent-border-alpha); outline-offset: 3px; }
+.rz-submit:disabled { opacity: .6; cursor: default; }
+.rz-warn { margin: 0; color: var(--warning); font-size: 13px; text-align: center; }
+
+.rz-error {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 0; padding: 12px 14px; border: 1px solid var(--danger-border); border-radius: var(--radius-control);
+  color: var(--danger-text); background: var(--danger-surface); font-size: 13px; line-height: 1.5;
+}
+.rz-page > .rz-error { margin-top: 16px; }
+.rz-success { margin: 0; padding: 10px 14px; border-radius: var(--radius-control); color: var(--success-text); background: var(--surface-control); font-size: 13px; }
+
+/* jarayon */
+.rz-progress { display: grid; gap: 14px; }
+.rz-bar { height: 8px; overflow: hidden; border-radius: 999px; background: var(--surface-control); box-shadow: inset 0 0 0 1px var(--border-subtle); }
+.rz-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .5s var(--ease); }
+.rz-progress p { display: flex; justify-content: space-between; gap: 12px; margin: 0; color: var(--text-secondary); font-size: 13px; }
+.rz-progress p b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.rz-progress .button { justify-self: start; min-height: 40px; }
+
+/* natija */
+.rz-result, .rz-failed { display: grid; gap: 14px; }
+.rz-failed p { margin: 0; color: var(--text-primary); font-size: 14px; line-height: 1.5; }
+.rz-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.rz-badges span { padding: 5px 10px; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--text-primary); font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.rz-badges .is-accent { border-color: transparent; color: var(--accent-ink); background: var(--accent); }
+.rz-result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rz-result-actions .button { min-height: 46px; display: grid; place-content: center; gap: 1px; line-height: 1.2; }
+.rz-result-actions .button small { color: var(--text-secondary); font-size: 11px; font-weight: 500; }
+
+/* oldin / keyin */
+.rz-compare { touch-action: pan-y; }
+.rz-compare > img, .rz-compare-before { position: absolute; inset: 0; width: 100%; height: 100%; }
+.rz-compare-after { object-fit: cover; clip-path: inset(0 0 0 var(--split)); }
+.rz-compare-before { display: grid; place-items: center; background: repeating-conic-gradient(var(--surface-control) 0 25%, var(--surface-card) 0 50%) 0 0 / 20px 20px; }
+.rz-compare-before img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.rz-compare-line { position: absolute; top: 0; bottom: 0; left: var(--split); width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .25); pointer-events: none; }
+.rz-compare-line i {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%;
+  color: #141110; background: #fff; font-style: normal; font-size: 16px; box-shadow: 0 6px 18px rgba(0, 0, 0, .3);
+}
+.rz-tag { position: absolute; top: 10px; padding: 4px 9px; border-radius: 999px; color: #fff; background: rgba(0, 0, 0, .5); font-size: 12px; font-weight: 650; pointer-events: none; }
+.rz-tag.is-before { left: 10px; } .rz-tag.is-after { right: 10px; }
+.rz-compare input[type="range"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+.rz-compare:has(input:focus-visible) { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+/* ---------- bosh sahifadagi kirish nuqtasi ---------- */
+.rz-entry {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  width: 100%; margin-top: 16px; padding: 12px 14px; text-align: left;
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-control);
+  background: var(--surface-card); color: var(--text-primary); cursor: pointer;
+  transition: border-color .15s ease;
+}
+.rz-entry:hover { border-color: var(--accent); }
+.rz-entry:focus-visible { outline: 3px solid var(--accent-border-alpha); outline-offset: 2px; }
+.rz-entry-icon { position: relative; width: 34px; height: 40px; }
+.rz-entry-icon::before, .rz-entry-icon::after { content: ""; position: absolute; border-radius: 3px; }
+.rz-entry-icon::before { left: 0; top: 12px; width: 24px; height: 24px; border: 1.5px dashed var(--text-tertiary); }
+.rz-entry-icon::after { right: 0; top: 0; width: 27px; height: 36px; border: 1.5px solid var(--accent); background: var(--accent-wash); }
+.rz-entry b { display: block; font-size: 13px; line-height: 1.35; font-weight: 650; }
+.rz-entry small { display: block; margin-top: 2px; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
+.rz-entry > span:last-child { color: var(--accent-soft-text); font-size: 18px; }
+
+/* loyihalar ro'yxatidagi yorliq */
+.project-kind { justify-self: start; padding: 2px 7px; border-radius: 999px; color: var(--accent-soft-text) !important; background: var(--accent-wash); font-size: 11px; font-weight: 650; }
+
+/* ---------- moslashuvchanlik ---------- */
+@media (max-width: 980px) {
+  .rz-layout { grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 32px; }
+  .rz-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .rz-drop { grid-template-columns: 1fr; justify-items: center; gap: 18px; min-height: 0; padding: 28px 20px; text-align: center; }
+  .rz-drop h2 { font-size: 20px; }
+  .rz-glyph { width: 92px; height: 108px; }
+  .rz-layout { grid-template-columns: 1fr; gap: 20px; }
+  .rz-stage-col { position: static; width: min(100%, 300px); margin: 0 auto; padding: 22px 24px 0 0; }
+  /* Telefonda usulni tanlash sahnadan oldin turmasin: sahna — tepada, darhol ko'rinadi. */
+  .rz-layout.is-choose .rz-stage-col { width: min(72%, 260px); }
+  .rz-modes { gap: 10px; }
+  .rz-result-actions { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rz-ai i, .rz-scan i, .rz-glyph-dst { animation: none !important; }
+  .rz-scan i { top: 36%; }
+}

@@ -76,7 +76,8 @@ export function ProjectsPage({ onNavigate, onLogout }: Omit<Props, "route">) {
         </button>
         <div className="project-meta">
           <b>{project.name}</b>
-          <span>{project.marketplace} · {new Date(project.createdAt).toLocaleDateString("uz-UZ")}</span>
+          {project.contentType === "resize" && <small className="project-kind">{t("resize.projectLabel")} · 1080×1440</small>}
+          <span>{project.contentType === "resize" ? "Uzum" : project.marketplace} · {new Date(project.createdAt).toLocaleDateString("uz-UZ")}</span>
           {(project.resultCount ?? 0) > 1 && <small>{t("cabinet.projects.count", { count: project.resultCount ?? 0 })}</small>}
         </div>
         <div className="project-actions">

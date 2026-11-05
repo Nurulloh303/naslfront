@@ -230,7 +230,12 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
           {/* Тот же инструмент на старшем сайте — там настроек больше.
               Ссылка вторичная, чтобы не уводить с рабочего сценария. */}
           <a className="feature-card-more" href={PRO_SITE_URL} target="_blank" rel="noopener noreferrer">{t("featureCatalog.pro.more")}</a>
-        </article>)}</div>
+        </article>)}
+        <article className="reference-card feature-card">
+          <div className="feature-card-top"><span className="feature-icon" aria-hidden="true">▯</span><span className="feature-badge">{t("resize.featureBadge")}</span></div>
+          <h2>{t("resize.nav")}</h2><p>{t("resize.homeTitle")}. {t("resize.homeText")}</p>
+          <button className="button primary" type="button" onClick={() => { setFeaturesOpen(false); onNavigate?.("resize"); }}>{t("featureCatalog.use")}</button>
+        </article></div>
 
         {/* Переход на «старший» сервис. Он живёт отдельно и умеет больше,
             поэтому ведём туда явно, а не прячем ссылку в подвале. */}
@@ -274,6 +279,12 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
             </div>}
             <ProductUpload assets={state.assets} isAnalyzing={isAnalyzing} onAssetsChange={flow.setAssets} />
             <div className="step-actions"><button type="button" className="reference-next" disabled={availableStep < 2} onClick={() => setActiveStep(2)}>{isAnalyzing ? t("create.analyzing") : t("create.continue")}</button></div>
+            {/* Отдельный бесплатный по шагам инструмент: только подогнать размер. */}
+            {onNavigate && <button type="button" className="rz-entry" onClick={() => onNavigate("resize")}>
+              <span className="rz-entry-icon" aria-hidden="true" />
+              <span><b>{t("resize.homeTitle")}</b><small>{t("resize.homeText")}</small></span>
+              <span aria-hidden="true">›</span>
+            </button>}
           </article>}
 
           {activeStep === 2 && <>
