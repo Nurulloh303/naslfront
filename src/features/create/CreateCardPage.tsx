@@ -22,7 +22,6 @@ import type { ContentMode, Marketplace } from "./domain/types";
 const BASE_MODES = new Set<ContentMode>(["photo", "card", "video"]);
 
 /** Старший сервис семейства — вынесен константой, чтобы менять в одном месте. */
-const PRO_SITE_URL = "https://www.infografikaai.uz/";
 
 type Step = 1 | 2 | 3;
 
@@ -227,9 +226,6 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
           <div className="feature-card-top"><span className="feature-icon" aria-hidden="true">{feature.icon}</span><span className="feature-badge">{feature.badge}</span></div>
           <h2>{feature.title}</h2><p>{feature.description}</p>
           <button className="button primary" type="button" onClick={() => openSpecialMode(feature.mode)}>{t("featureCatalog.use")}</button>
-          {/* Тот же инструмент на старшем сайте — там настроек больше.
-              Ссылка вторичная, чтобы не уводить с рабочего сценария. */}
-          <a className="feature-card-more" href={PRO_SITE_URL} target="_blank" rel="noopener noreferrer">{t("featureCatalog.pro.more")}</a>
         </article>)}
         <article className="reference-card feature-card">
           <div className="feature-card-top"><span className="feature-icon" aria-hidden="true">▯</span><span className="feature-badge">{t("resize.featureBadge")}</span></div>
@@ -237,24 +233,6 @@ export function CreateCardPage({ onNavigate, onLogout }: { onNavigate?: (route: 
           <button className="button primary" type="button" onClick={() => { setFeaturesOpen(false); onNavigate?.("resize"); }}>{t("featureCatalog.use")}</button>
         </article></div>
 
-        {/* Переход на «старший» сервис. Он живёт отдельно и умеет больше,
-            поэтому ведём туда явно, а не прячем ссылку в подвале. */}
-        <a className="pro-banner" href={PRO_SITE_URL} target="_blank" rel="noopener noreferrer">
-          <div className="pro-banner-text">
-            <span className="pro-banner-badge">{t("featureCatalog.pro.badge")}</span>
-            <b>{t("featureCatalog.pro.title")}</b>
-            <p>{t("featureCatalog.pro.text")}</p>
-            <ul className="pro-banner-list">
-              {["fashion", "smartText", "photoPro", "package"].map((key) => <li key={key}>{t(`featureCatalog.pro.items.${key}`)}</li>)}
-            </ul>
-            <span className="pro-banner-cta">{t("featureCatalog.pro.cta")} ↗</span>
-          </div>
-          <div className="pro-banner-preview" aria-hidden="true">
-            <div className="pro-preview-card"><i /><b /><em /><em /></div>
-            <div className="pro-preview-card is-second"><i /><b /><em /></div>
-            <span className="pro-preview-glow" />
-          </div>
-        </a>
       </section>
     </div>}
     <section id="top" className="reference-workspace">
