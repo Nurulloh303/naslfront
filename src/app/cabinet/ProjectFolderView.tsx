@@ -68,6 +68,7 @@ export function ProjectFolderView({ id, onClose, onDeleted }: { id: string; onCl
       </div>
       <div className="folder-bar-actions">
         <a className="button primary" href={folder.archiveUrl} download>{t("cabinet.folder.downloadAll")}</a>
+        {folder.contentType !== "resize" && folder.marketplace !== "Video" ? <a className="button secondary uz-open-btn" href={`#uzum?project=${encodeURIComponent(folder.id)}`}>{t("uzum.open")}</a> : null}
         <button type="button" className="button secondary is-danger" disabled={busy} onClick={() => void remove()}>{t("cabinet.projects.delete")}</button>
       </div>
     </div>

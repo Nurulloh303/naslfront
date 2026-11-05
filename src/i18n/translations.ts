@@ -3,10 +3,13 @@
 // (uz/ru/tg), which controls the language of TEXT printed on the generated
 // AI infographic card itself. Consumed via i18n/LanguageContext's t()/dict.
 
+import { uzumRu, uzumUz } from "../features/uzum/i18n";
+
 export type Language = "uz" | "ru";
 export const LANGUAGE_STORAGE_KEY = "naslai:ui-lang";
 
 const uz = {
+  uzum: uzumUz,
   common: { brand: "naslai.uz", token: "token" },
   nav: { otherFeatures: "Boshqa imkoniyatlar", batch: "Partiya", createCard: "Karta yaratish", newProject: "Loyiha yaratish", allProjects: "Barcha loyihalar", profileAria: "Foydalanuvchi profili" },
   profileMenu: { topUp: "Tokenlarni to‘ldirish", profile: "Profil", logout: "Chiqish", adminPanel: "Admin panel", adminPanelHint: "Promokod, API kalit, tokenlar", djangoAdmin: "Django admin", djangoAdminHint: "Yangi oynada ochiladi" },
@@ -49,7 +52,7 @@ const uz = {
     promptCard: "Erkin izoh: rang, kayfiyat, nima urg‘ulash kerakligini yozing. Bo‘sh qoldirsangiz ham ishlaydi.",
     sceneWish: "Faqat fon va muhit uchun: mahsulot qayerda tursin. Bu yozuv kartaga matn bo‘lib chiqmaydi va mahsulotni o‘zgartirmaydi.",
   },
-  routes: { create: "Karta yaratish", projects: "Barcha loyihalar", billing: "Token balansi", history: "Operatsiyalar tarixi", profile: "Foydalanuvchi profili", referrals: "Taklif dasturi", api: "API kabineti", audit: "Sotuv yomonmi?", resize: "O‘lchamni moslash", admin: "Admin panel", privacy: "Maxfiylik siyosati", terms: "Foydalanish shartlari", offer: "Ommaviy oferta" },
+  routes: { create: "Karta yaratish", projects: "Barcha loyihalar", billing: "Token balansi", history: "Operatsiyalar tarixi", profile: "Foydalanuvchi profili", referrals: "Taklif dasturi", api: "API kabineti", audit: "Sotuv yomonmi?", resize: "O‘lchamni moslash", uzum: "Uzum uchun Excel", admin: "Admin panel", privacy: "Maxfiylik siyosati", terms: "Foydalanish shartlari", offer: "Ommaviy oferta" },
   theme: { label: "Mavzu", light: "Yorug‘", dark: "Qorong‘i" },
   plan: {
     title: "Kartadagi matn", hint: "Generatsiyadan oldin ko‘ring va tuzating. Bepul.",
@@ -646,6 +649,7 @@ const uz = {
 };
 
 const ru: typeof uz = {
+  uzum: uzumRu,
   common: { brand: "naslai.uz", token: "токен" },
   nav: { otherFeatures: "Другие возможности", batch: "Партия", createCard: "Создать карточку", newProject: "Создать проект", allProjects: "Все проекты", profileAria: "Профиль пользователя" },
   profileMenu: { topUp: "Пополнить токены", profile: "Профиль", logout: "Выйти", adminPanel: "Админ-панель", adminPanelHint: "Промокоды, API ключи, токены", djangoAdmin: "Django admin", djangoAdminHint: "Откроется в новой вкладке" },
@@ -688,7 +692,7 @@ const ru: typeof uz = {
     sceneWish: "Только фон и обстановка: где стоит товар. На карточку этот текст не попадёт и сам товар не изменит.",
     promptCard: "Свободный комментарий: цвет, настроение, что подчеркнуть. Можно оставить пустым.",
   },
-  routes: { create: "Создать карточку", projects: "Все проекты", billing: "Баланс токенов", history: "История операций", profile: "Профиль пользователя", referrals: "Реферальная программа", api: "API кабинет", audit: "Плохие продажи?", resize: "Подогнать размер", admin: "Админка", privacy: "Политика конфиденциальности", terms: "Условия использования", offer: "Публичная оферта" },
+  routes: { create: "Создать карточку", projects: "Все проекты", billing: "Баланс токенов", history: "История операций", profile: "Профиль пользователя", referrals: "Реферальная программа", api: "API кабинет", audit: "Плохие продажи?", resize: "Подогнать размер", uzum: "Excel для Uzum", admin: "Админка", privacy: "Политика конфиденциальности", terms: "Условия использования", offer: "Публичная оферта" },
   theme: { label: "Тема", light: "Светлая", dark: "Тёмная" },
   plan: {
     title: "Текст на карточке", hint: "Посмотрите и поправьте до генерации. Бесплатно.",

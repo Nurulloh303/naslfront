@@ -1,0 +1,395 @@
+/* ============================================================
+   Uzum uchun Excel (#uzum)
+   G'oya: hamma narsa mavjud token tizimida, sokin. Bitta "esda
+   qoladigan" joy — tekshirish qadamidagi jadval: Excelning o'zidek
+   ustun harflari va 4-satrdan boshlanadigan raqamlar. Sotuvchi
+   faylga aynan nima tushishini ko'radi.
+   ============================================================ */
+
+.uz-page .cabinet-content { width: min(980px, calc(100% - 64px)); }
+
+/* natija kartasi va loyiha papkasidagi tugma */
+.uz-open-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; white-space: nowrap; }
+.uz-open-btn::before { content: ""; width: 12px; height: 14px; margin-right: 7px; border: 1.6px solid currentColor; border-radius: 2px; background: linear-gradient(currentColor, currentColor) 50% 45% / 6px 1.4px no-repeat, linear-gradient(currentColor, currentColor) 50% 70% / 6px 1.4px no-repeat; opacity: .8; }
+
+.uz-muted { margin: 10px 0; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+.uz-error { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--danger-border); border-radius: var(--radius-control); color: var(--danger-text); background: var(--danger-surface); font-size: 14px; line-height: 1.45; }
+.uz-link { padding: 0; border: 0; background: none; color: var(--accent-soft-text); font: inherit; font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.uz-link:disabled { color: var(--text-disabled); cursor: default; }
+.uz-link.is-danger { color: var(--danger-text); }
+.uz-page a.button { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.uz-page .button:focus-visible, .uz-link:focus-visible, .uz-chips button:focus-visible, .uz-pool button:focus-visible, .uz-catlist button:focus-visible, .uz-stepper button:focus-visible, .uz-cta:focus-visible, .uz-quick button:focus-visible, .uz-apply:focus-visible, .uz-order-move button:focus-visible {
+  outline: 3px solid var(--accent-border-alpha); outline-offset: 2px;
+}
+
+/* ---------- boshlash sahifasi ---------- */
+.uz-start { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; }
+.uz-start-card { padding: 24px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-card); }
+.uz-start-card h2 { margin: 0 0 6px; font-family: var(--font-display); font-size: 20px; line-height: 1.3; font-weight: 600; color: var(--text-primary); }
+.uz-start-card > p { margin: 0 0 18px; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+.uz-start-card.is-blank { display: flex; flex-direction: column; align-items: flex-start; background: transparent; border-style: dashed; border-color: var(--border-strong); }
+.uz-start-btn { min-height: 44px; margin-top: auto; padding: 0 20px; font-size: 14px; }
+.uz-start-card.is-blank small { margin: 10px 0 0; font-size: 13px; }
+.uz-start-projects { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.uz-start-projects a { display: grid; gap: 7px; color: var(--text-primary); text-decoration: none; font-size: 13px; line-height: 1.3; }
+.uz-start-projects img, .uz-start-ph { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 10px; background: var(--surface-control); box-shadow: 0 0 0 1px var(--border-subtle); transition: box-shadow .15s ease, transform .15s ease; }
+.uz-start-ph { display: grid; place-items: center; color: var(--accent); font-size: 22px; }
+.uz-start-projects a:hover img, .uz-start-projects a:focus-visible img { box-shadow: 0 0 0 2px var(--accent); }
+.uz-start-projects a:focus-visible { outline: none; }
+.uz-start-projects span:not(.uz-start-ph) { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+.uz-exports { margin-top: 40px; }
+.uz-exports h2 { margin: 0 0 14px; font-family: var(--font-display); font-size: 20px; font-weight: 600; color: var(--text-primary); }
+.uz-exports-empty { display: flex; align-items: center; gap: 16px; padding: 22px; border: 1px dashed var(--border-strong); border-radius: var(--radius-card); color: var(--text-tertiary); }
+.uz-exports-empty b { color: var(--text-primary); font-size: 15px; }
+.uz-exports-empty p { margin: 3px 0 0; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+.uz-export-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-card); overflow: hidden; }
+.uz-export-list li { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto auto; align-items: center; gap: 18px; padding: 14px 18px; border-bottom: 1px solid var(--border-subtle); }
+.uz-export-list li:last-child { border-bottom: 0; }
+.uz-export-list time { color: var(--text-secondary); font-size: 13px; }
+.uz-export-main { display: grid; gap: 2px; min-width: 0; }
+.uz-export-main b { color: var(--text-primary); font-size: 15px; }
+.uz-export-main span { overflow: hidden; color: var(--text-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.uz-export-meta { display: grid; gap: 2px; justify-items: end; color: var(--text-primary); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.uz-export-meta small { color: var(--text-secondary); font-size: 12px; font-weight: 400; }
+.uz-export-meta small.is-expired { color: var(--warning); }
+.uz-export-list .button { min-height: 38px; }
+.uz-export-err { grid-column: 1 / -1; margin: 0; }
+
+/* ---------- stepper ---------- */
+.uz-project { margin: -12px 0 18px; color: var(--text-secondary); font-size: 14px; }
+.uz-stepper { margin-bottom: 18px; }
+.uz-stepper ol { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.uz-stepper li { position: relative; }
+.uz-stepper button {
+  width: 100%; display: grid; gap: 9px; justify-items: start; padding: 0 0 4px; border: 0; background: none;
+  color: var(--text-secondary); font: inherit; text-align: left; cursor: pointer;
+}
+.uz-stepper button::before { content: ""; width: 100%; height: 4px; border-radius: 99px; background: var(--border-subtle); transition: background-color .2s ease; }
+.uz-stepper .is-done button::before { background: var(--text-primary); }
+.uz-stepper .is-current button::before { background: var(--accent); }
+.uz-step-n { display: none; }
+.uz-step-label { font-size: 13px; font-weight: 600; line-height: 1.2; }
+.uz-stepper .is-current button { color: var(--text-primary); }
+.uz-stepper .is-done button { color: var(--text-primary); }
+.uz-stepper .has-issue .uz-step-label::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--danger); vertical-align: 1px; }
+.uz-step-mobile { display: none; }
+
+/* ---------- panel ---------- */
+.uz-panel { padding: 30px 32px 32px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-card); }
+.uz-head { margin-bottom: 22px; }
+.uz-head h2 { margin: 0; font-family: var(--font-display); font-size: 24px; line-height: 1.25; font-weight: 600; letter-spacing: -.01em; color: var(--text-primary); }
+.uz-head p { max-width: 62ch; margin: 8px 0 0; color: var(--text-secondary); font-size: 15px; line-height: 1.55; }
+.uz-sub { margin: 28px 0 14px; color: var(--text-primary); font-size: 15px; font-weight: 700; }
+.uz-sub small { margin-left: 6px; color: var(--text-secondary); font-size: 13px; font-weight: 400; }
+.uz-head + .uz-sub, .uz-head + .uz-muted + .uz-sub { margin-top: 0; }
+.uz-notice { margin: 0 0 14px; padding: 10px 14px; border-radius: var(--radius-control); color: var(--warning); background: var(--surface-card); border: 1px solid var(--border-subtle); font-size: 14px; }
+.uz-step-error { margin: 20px 0 0; color: var(--danger-text); font-size: 14px; font-weight: 600; }
+
+/* ---------- maydonlar ---------- */
+.uz-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; }
+.uz-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.uz-grid-4.uz-grid-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr); }
+.uz-field { display: grid; align-content: start; gap: 7px; min-width: 0; margin-bottom: 16px; border-radius: 12px; }
+.uz-field-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; min-height: 22px; }
+.uz-field-head label { color: var(--text-primary); font-size: 14px; font-weight: 650; }
+.uz-field-head label small { margin-left: 7px; color: var(--text-tertiary); font-size: 12px; font-weight: 500; }
+.uz-lang { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 6px; color: var(--text-secondary); background: var(--surface-control); font-size: 11px; font-style: normal; font-weight: 700; vertical-align: 1px; }
+.uz-field-foot { display: flex; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 13px; line-height: 1.45; }
+.uz-field-foot p { margin: 0; }
+.uz-field-msgs { display: grid; gap: 3px; }
+.uz-field-foot a { color: var(--accent-soft-text); font-weight: 600; white-space: nowrap; }
+.uz-counter { flex: 0 0 auto; color: var(--text-tertiary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.uz-field-error { margin: 0; color: var(--danger-text) !important; font-size: 13px; font-weight: 600; }
+
+.uz-input {
+  width: 100%; min-height: 46px; padding: 0 14px;
+  border: 1.5px solid var(--border-strong); border-radius: var(--radius-control);
+  color: var(--text-primary); background: var(--surface-input); font: inherit; font-size: 15px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+textarea.uz-input { min-height: 0; padding: 12px 14px; line-height: 1.55; resize: vertical; }
+.uz-input::placeholder { color: var(--text-disabled); }
+.uz-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
+.uz-input[aria-invalid="true"] { border-color: var(--danger); }
+.uz-input-lg { min-height: 52px; font-size: 16px; }
+.uz-ikpu { font-variant-numeric: tabular-nums; letter-spacing: .12em; }
+
+.uz-field.is-ai .uz-input { border-color: var(--accent-border-alpha); background: color-mix(in srgb, var(--accent) 4%, var(--surface-input)); }
+.uz-ai { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; color: var(--accent-soft-text); background: var(--accent-wash); font-size: 12px; font-weight: 700; white-space: nowrap; }
+
+.uz-bi { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
+
+/* "Tuzatish" bosilganda maydon bir zum yonadi */
+.uz-flash { animation: uzFlash 2.2s var(--ease); }
+@keyframes uzFlash {
+  0%, 30% { box-shadow: 0 0 0 4px var(--accent-border-alpha), 0 0 0 12px var(--accent-wash); }
+  100% { box-shadow: 0 0 0 0 var(--accent-transparent); }
+}
+.uz-flashable:focus { outline: none; }
+
+/* combobox */
+.uz-combo { position: relative; }
+.uz-combo-box { position: relative; }
+.uz-combo-box .uz-input { padding-right: 62px; }
+.uz-combo-caret { position: absolute; right: 16px; top: 50%; width: 8px; height: 8px; margin-top: -6px; border-right: 1.6px solid var(--text-secondary); border-bottom: 1.6px solid var(--text-secondary); transform: rotate(45deg); pointer-events: none; }
+.uz-combo-clear { position: absolute; right: 34px; top: 50%; width: 26px; height: 26px; margin-top: -13px; border: 0; border-radius: 50%; color: var(--text-secondary); background: transparent; font-size: 20px; line-height: 1; cursor: pointer; }
+.uz-combo-clear:hover { color: var(--text-primary); background: var(--surface-control); }
+.uz-combo-list {
+  position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 6px);
+  max-height: 280px; overflow-y: auto; margin: 0; padding: 6px; list-style: none;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-control);
+  background: var(--surface-elevated); box-shadow: 0 18px 40px -18px var(--shadow-strong);
+}
+.uz-combo-list li[role="option"] { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--text-primary); font-size: 14px; cursor: pointer; }
+.uz-combo-list li.is-active { background: var(--surface-hover); }
+.uz-combo-list li[aria-selected="true"] { color: var(--accent-soft-text); font-weight: 650; }
+.uz-combo-note { display: grid; gap: 2px; padding: 10px 12px; color: var(--text-secondary); font-size: 14px; }
+.uz-combo-note small { font-size: 12px; }
+.uz-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.uz-quick button, .uz-chips button {
+  min-height: 36px; padding: 0 14px; border: 1.5px solid var(--border-strong); border-radius: 999px;
+  color: var(--text-primary); background: var(--surface-card); font: inherit; font-size: 14px; font-weight: 550; cursor: pointer;
+}
+.uz-quick button[aria-pressed="true"], .uz-chips button[aria-pressed="true"] { border-color: var(--selected-bg); color: var(--selected-ink); background: var(--selected-bg); }
+:root[data-theme="dark"] .uz-quick button[aria-pressed="true"], :root[data-theme="dark"] .uz-chips button[aria-pressed="true"] { border-color: var(--accent); }
+
+/* qo'shimcha (yig'iladigan) bo'limlar */
+.uz-more { margin-top: 10px; border-top: 1px solid var(--border-subtle); }
+.uz-more > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 16px 0; cursor: pointer; list-style: none; }
+.uz-more > summary::-webkit-details-marker { display: none; }
+.uz-more > summary::before { content: "+"; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: var(--text-primary); background: var(--surface-control); font-weight: 700; transition: transform .2s var(--ease); }
+.uz-more[open] > summary::before { content: "–"; }
+.uz-more > summary b { color: var(--text-primary); font-size: 15px; }
+.uz-more > summary span { color: var(--text-secondary); font-size: 13px; }
+.uz-more.is-compact { margin-top: 4px; }
+.uz-more.is-compact > summary { padding: 12px 0; }
+
+/* ---------- 1. kategoriya ---------- */
+.uz-onefile { margin: -6px 0 22px; padding: 12px 16px; border-left: 3px solid var(--accent); border-radius: 0 var(--radius-control) var(--radius-control) 0; background: var(--surface-control); color: var(--text-primary); font-size: 14px; line-height: 1.5; }
+.uz-chosen { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 18px; padding: 18px 20px; border: 1.5px solid var(--text-primary); border-radius: var(--radius-card); background: var(--surface-elevated); }
+:root[data-theme="dark"] .uz-chosen { border-color: var(--accent-border-alpha); }
+.uz-chosen small { grid-column: 1 / -1; color: var(--text-secondary); font-size: 13px; }
+.uz-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 14px; color: var(--text-secondary); }
+.uz-crumbs li:not(:last-child)::after { content: "›"; margin-left: 4px; color: var(--text-tertiary); }
+.uz-crumbs li.is-last { padding: 3px 10px; border-radius: 999px; color: var(--accent-ink); background: var(--accent); font-weight: 700; }
+.uz-catsearch .uz-link { margin-top: 12px; }
+.uz-catlist { display: grid; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
+.uz-catlist button { width: 100%; display: grid; gap: 3px; padding: 13px 16px; border: 1px solid var(--border-subtle); border-radius: var(--radius-control); color: var(--text-primary); background: var(--surface-elevated); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s ease, background-color .15s ease; }
+.uz-catlist button:hover { border-color: var(--accent); background: var(--accent-wash); }
+.uz-catlist button[aria-pressed="true"] { border-color: var(--accent); }
+.uz-catlist b { font-size: 15px; }
+.uz-catlist span { color: var(--text-secondary); font-size: 13px; line-height: 1.4; }
+
+/* ---------- 3. variantlar ---------- */
+.uz-skus { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
+.uz-sku { padding: 20px 20px 8px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-elevated); }
+.uz-sku-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 14px; }
+.uz-sku-head h3 { margin: 0; font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--text-primary); }
+.uz-sku-head h3 small { margin-left: 10px; color: var(--text-secondary); font-family: var(--font-sans); font-size: 13px; font-weight: 500; }
+.uz-sku-head div { display: flex; gap: 16px; }
+.uz-num { position: relative; }
+.uz-num .uz-input { padding-right: 52px; font-variant-numeric: tabular-nums; }
+.uz-num span { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); font-size: 13px; pointer-events: none; }
+.uz-pack { margin: 2px 0 6px; padding: 14px 16px 4px; border-radius: var(--radius-control); background: var(--surface-control); }
+.uz-pack-title { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; color: var(--text-primary); font-size: 13px; font-weight: 700; }
+.uz-pack-title svg { color: var(--accent); }
+.uz-pack .uz-input { background: var(--surface-card); }
+.uz-apply { margin: -4px 0 12px; padding: 0; border: 0; background: none; color: var(--accent-soft-text); font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; }
+.uz-apply:disabled { color: var(--text-disabled); cursor: default; }
+.uz-sku-add { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0 8px; }
+.uz-sku-add .button { min-height: 44px; padding: 0 18px; font-weight: 650; }
+.uz-sku-add small { color: var(--text-secondary); font-size: 13px; }
+
+/* ---------- 4. rasmlar ---------- */
+.uz-order { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.uz-order li { display: grid; gap: 6px; cursor: grab; transition: opacity .15s ease, transform .15s ease; }
+.uz-order li.is-dragging { opacity: .4; }
+.uz-order li.is-over figure { box-shadow: 0 0 0 3px var(--accent); }
+.uz-order figure { position: relative; margin: 0; overflow: hidden; aspect-ratio: 3 / 4; border-radius: 10px; background: var(--surface-control); box-shadow: 0 0 0 1px var(--border-subtle); }
+.uz-order li:first-child figure { box-shadow: 0 0 0 2px var(--text-primary); }
+:root[data-theme="dark"] .uz-order li:first-child figure { box-shadow: 0 0 0 2px var(--accent); }
+.uz-order img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.uz-order-n { position: absolute; left: 6px; top: 6px; min-width: 24px; height: 24px; display: grid; place-items: center; padding: 0 7px; border-radius: 7px; color: var(--text-primary); background: var(--icon-glass); font-size: 12px; font-weight: 700; }
+.uz-order-n.is-main { color: var(--accent-ink); background: var(--accent); }
+.uz-order-x { position: absolute; right: 6px; top: 6px; width: 28px; height: 28px; border: 0; border-radius: 50%; color: var(--text-primary); background: var(--icon-glass); font-size: 18px; line-height: 1; cursor: pointer; }
+.uz-order-move { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.uz-order-move button { height: 32px; border: 1px solid var(--border-subtle); border-radius: 8px; color: var(--text-primary); background: var(--surface-elevated); font-size: 18px; line-height: 1; cursor: pointer; }
+.uz-order-move button:disabled { color: var(--text-disabled); cursor: default; }
+.uz-photo-empty { margin: 0; padding: 28px 18px; border: 2px dashed var(--border-subtle); border-radius: var(--radius-control); color: var(--text-secondary); text-align: center; font-size: 14px; }
+.uz-pool { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.uz-pool button { position: relative; width: 100%; padding: 0; overflow: hidden; aspect-ratio: 3 / 4; border: 0; border-radius: 9px; background: var(--surface-control); box-shadow: 0 0 0 1px var(--border-subtle); cursor: pointer; }
+.uz-pool img { width: 100%; height: 100%; object-fit: cover; }
+.uz-pool button span { position: absolute; right: 5px; bottom: 5px; min-width: 26px; height: 26px; display: grid; place-items: center; padding: 0 7px; border-radius: 13px; color: var(--text-primary); background: var(--icon-glass); font-size: 13px; font-weight: 700; }
+.uz-pool button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); }
+.uz-pool button[aria-pressed="true"] span { color: var(--accent-ink); background: var(--accent); }
+.uz-pool button[aria-pressed="true"] img { opacity: .72; }
+.uz-photo-add { margin: 18px 0 0; }
+.uz-photo-add .button { min-height: 44px; padding: 0 18px; font-weight: 650; }
+.uz-consent { display: flex; gap: 14px; margin-top: 24px; padding: 16px 18px; border: 1.5px solid var(--warning); border-radius: var(--radius-card); background: var(--surface-elevated); cursor: pointer; }
+.uz-consent.is-on { border-color: var(--border-subtle); }
+.uz-consent input { flex: 0 0 auto; width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--accent); cursor: pointer; }
+.uz-consent span { display: grid; gap: 4px; }
+.uz-consent b { color: var(--text-primary); font-size: 15px; }
+.uz-consent small { color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+.uz-consent em { color: var(--text-primary); font-size: 14px; font-style: normal; font-weight: 650; }
+
+/* ---------- 5. xususiyatlar ---------- */
+.uz-filter { min-width: 0; margin: 0 0 14px; padding: 16px 18px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-elevated); }
+.uz-filter.has-error { border-color: var(--danger-border); }
+.uz-filter legend { display: contents; }
+.uz-filter legend b { color: var(--text-primary); font-size: 15px; }
+.uz-req { margin-left: 8px; padding: 2px 7px; border-radius: 6px; color: var(--danger-text); background: var(--danger-surface); font-size: 12px; font-weight: 700; }
+.uz-filter legend small { display: block; margin: 3px 0 12px; color: var(--text-secondary); font-size: 13px; }
+.uz-filter-search { min-height: 40px; margin-bottom: 10px; font-size: 14px; }
+.uz-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.uz-chips button.is-multi[aria-pressed="true"]::before { content: "✓ "; }
+.uz-chips .uz-chip-more { border-style: dashed; color: var(--text-secondary); }
+.uz-filter .uz-field-error { margin-top: 10px; }
+
+/* ---------- 6. tekshirish ---------- */
+.uz-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0 0 22px; overflow: hidden; border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--border-subtle); }
+.uz-summary div { padding: 12px 14px; background: var(--surface-elevated); min-width: 0; }
+.uz-summary dt { color: var(--text-secondary); font-size: 12px; }
+.uz-summary dd { margin: 3px 0 0; overflow: hidden; color: var(--text-primary); font-size: 14px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Excel'ning o'zidek jadval */
+.uz-sheet { margin: 0 0 22px; }
+.uz-sheet figcaption { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; }
+.uz-sheet figcaption b { color: var(--text-primary); font-size: 15px; }
+.uz-sheet figcaption span { color: var(--text-secondary); font-size: 13px; }
+.uz-sheet-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-elevated); }
+.uz-sheet-scroll:focus-visible { outline: 3px solid var(--accent-border-alpha); outline-offset: 2px; }
+.uz-sheet table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.uz-sheet th, .uz-sheet td { padding: 7px 10px; border-right: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); text-align: left; white-space: nowrap; }
+.uz-sheet tr > :last-child { border-right: 0; }
+.uz-sheet tbody tr:last-child > * { border-bottom: 0; }
+.uz-sheet-letters th { padding: 4px 10px; color: var(--text-tertiary); background: var(--surface-control); font-size: 11px; font-weight: 600; text-align: center; }
+.uz-sheet thead tr:last-child th { color: var(--text-primary); background: var(--surface-control); font-weight: 700; }
+.uz-sheet th:first-child, .uz-sheet tbody th { width: 38px; color: var(--text-tertiary); background: var(--surface-control); font-weight: 600; text-align: center; }
+.uz-sheet td:nth-child(2) { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+.uz-sheet td { color: var(--text-primary); }
+.uz-sheet .is-num { text-align: right; }
+.uz-sheet td.is-empty { color: var(--text-disabled); }
+
+.uz-check { margin-bottom: 18px; }
+.uz-check-line { display: flex; align-items: center; gap: 10px; margin: 0; color: var(--text-secondary); font-size: 15px; }
+.uz-check-ok { margin: 0; padding: 14px 16px; border-radius: var(--radius-control); color: var(--success-text); background: color-mix(in srgb, var(--success) 10%, transparent); font-size: 15px; font-weight: 700; }
+.uz-issues { border: 1px solid var(--danger-border); border-radius: var(--radius-card); background: var(--surface-elevated); overflow: hidden; }
+.uz-issues-title { margin: 0; padding: 12px 18px; color: var(--danger-text); background: var(--danger-surface); font-size: 15px; font-weight: 700; }
+.uz-issues section { padding: 12px 18px 6px; border-top: 1px solid var(--border-subtle); }
+.uz-issues h3 { margin: 0 0 6px; color: var(--text-secondary); font-size: 13px; font-weight: 700; }
+.uz-issues ul { margin: 0; padding: 0; list-style: none; }
+.uz-issues li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 8px 0; color: var(--text-primary); font-size: 14px; line-height: 1.45; }
+.uz-issues li + li { border-top: 1px dashed var(--border-subtle); }
+.uz-issues li .button { flex: 0 0 auto; min-height: 34px; font-weight: 650; }
+
+.uz-prepare { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; }
+.uz-cta {
+  display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+  min-height: 56px; padding: 0 28px; border: 0; border-radius: 14px;
+  color: var(--accent-ink); background: var(--accent); font: inherit; font-family: var(--font-display); font-size: 17px; font-weight: 700;
+  cursor: pointer; transition: transform .15s ease, box-shadow .15s ease;
+}
+.uz-cta:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 14px 34px -10px var(--secondary-accent-glow); }
+.uz-cta:disabled { color: var(--text-disabled); background: var(--surface-control); cursor: not-allowed; }
+
+/* ---------- pastki navigatsiya ---------- */
+.uz-nav { display: flex; justify-content: space-between; gap: 12px; margin-top: 18px; }
+.uz-nav .button { min-height: 46px; padding: 0 20px; font-size: 15px; font-weight: 650; }
+.uz-autosave { margin: 14px 0 0; color: var(--text-tertiary); font-size: 13px; }
+.uz-autosave .uz-link { margin-left: 6px; font-size: 13px; color: var(--text-secondary); }
+
+/* ---------- tayyor ---------- */
+.uz-done-head { display: flex; align-items: flex-start; gap: 18px; margin-bottom: 26px; }
+.uz-done-mark { flex: 0 0 auto; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; color: var(--accent-ink); background: var(--accent); font-size: 24px; font-weight: 800; animation: uzPop .5s var(--ease) both; }
+@keyframes uzPop { from { transform: scale(.6); opacity: 0; } }
+.uz-done-head h2 { margin: 2px 0 6px; font-family: var(--font-display); font-size: 28px; line-height: 1.2; font-weight: 600; letter-spacing: -.015em; color: var(--text-primary); }
+.uz-done-head p { max-width: 60ch; margin: 0; color: var(--text-secondary); font-size: 15px; line-height: 1.55; }
+.uz-done-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.uz-ticket { padding: 22px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-card); }
+.uz-ticket-file { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding: 14px 16px; border-radius: var(--radius-control); background: var(--surface-control); }
+.uz-ticket-file .uz-xlsm { flex: 0 0 auto; width: 30px; height: 34px; color: var(--accent); }
+.uz-ticket-file div { display: grid; gap: 3px; min-width: 0; }
+.uz-ticket-file b { overflow: hidden; color: var(--text-primary); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.uz-ticket-file span { color: var(--text-secondary); font-size: 13px; }
+.uz-ticket .uz-cta { width: 100%; }
+.uz-saved { margin: 10px 0 0; color: var(--success-text); font-size: 14px; font-weight: 650; }
+.uz-expiry { margin: 12px 0 0; color: var(--text-secondary); font-size: 13px; }
+.uz-links { margin-top: 14px; border-top: 1px solid var(--border-subtle); }
+.uz-links summary { padding: 12px 0 6px; color: var(--text-primary); font-size: 14px; font-weight: 650; cursor: pointer; }
+.uz-links ol { display: grid; gap: 6px; margin: 4px 0 0; padding-left: 22px; color: var(--text-tertiary); font-size: 13px; }
+.uz-links li { padding-left: 2px; }
+.uz-links li > * { vertical-align: middle; }
+.uz-links a { display: inline-block; max-width: calc(100% - 92px); overflow: hidden; color: var(--text-primary); text-overflow: ellipsis; white-space: nowrap; }
+.uz-links .uz-link { margin-left: 10px; font-size: 13px; }
+.uz-how { padding: 22px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); }
+.uz-how h3 { margin: 0 0 14px; font-family: var(--font-display); font-size: 18px; font-weight: 600; color: var(--text-primary); }
+.uz-how ol { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; counter-reset: how; }
+.uz-how li { position: relative; padding-left: 38px; color: var(--text-primary); font-size: 15px; line-height: 1.5; counter-increment: how; }
+.uz-how li::before { content: counter(how); position: absolute; left: 0; top: -1px; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; color: var(--selected-ink); background: var(--selected-bg); font-size: 13px; font-weight: 700; }
+.uz-tip { margin: 18px 0 0; padding: 12px 14px; border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; color: var(--text-primary); background: var(--accent-wash); font-size: 14px; font-weight: 650; }
+.uz-done-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.uz-done-actions .button { min-height: 44px; padding: 0 18px; font-weight: 650; }
+
+/* ---------- planshet / telefon ---------- */
+@media (max-width: 900px) {
+  .uz-page .cabinet-content { width: calc(100% - 40px); }
+  .uz-start { grid-template-columns: 1fr; }
+  .uz-grid-4, .uz-grid-4.uz-grid-main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .uz-done-grid { grid-template-columns: 1fr; }
+  .uz-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .uz-page .cabinet-content { width: calc(100% - 32px); padding-top: 24px; }
+  .uz-page .cabinet-page-heading { margin-bottom: 18px; }
+  .uz-page .cabinet-page-heading h1 { font-size: 24px; line-height: 30px; }
+  .uz-start-projects { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .uz-start-card { padding: 18px; }
+
+  .uz-export-list li { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 14px 16px; }
+  .uz-export-list time { grid-column: 1 / -1; font-size: 12px; }
+  .uz-export-meta { justify-items: start; grid-column: 1; }
+  .uz-export-list .button { grid-column: 2; grid-row: 2 / span 2; align-self: center; }
+
+  .uz-project { margin-top: -8px; }
+  .uz-stepper ol { gap: 4px; }
+  .uz-stepper button { gap: 0; padding: 0; }
+  .uz-step-label { display: none; }
+  .uz-step-mobile { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 10px 0 0; }
+  .uz-step-mobile b { color: var(--text-primary); font-family: var(--font-display); font-size: 16px; font-weight: 600; }
+  .uz-step-mobile span { color: var(--text-secondary); font-size: 13px; }
+  .uz-stepper .has-issue button::before { background: var(--danger); }
+
+  .uz-panel { margin: 0 -16px; padding: 22px 16px 24px; border-right: 0; border-left: 0; border-radius: 0; }
+  .uz-head h2 { font-size: 21px; }
+  .uz-head p { font-size: 14px; }
+  .uz-grid, .uz-grid-4, .uz-grid-4.uz-grid-main, .uz-bi { grid-template-columns: 1fr; }
+  .uz-pack .uz-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 10px; }
+  .uz-sku { padding: 16px 14px 6px; }
+  .uz-pack { padding: 12px 12px 2px; }
+  .uz-chosen { grid-template-columns: 1fr; padding: 16px; }
+  .uz-chosen .button { justify-self: start; }
+  .uz-order { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .uz-pool { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .uz-issues li { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .uz-cta { width: 100%; }
+  .uz-prepare { justify-content: center; }
+
+  /* pastki tugmalar barmoq ostida turadi */
+  .uz-nav {
+    position: sticky; bottom: 0; z-index: 20; margin: 0 -16px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border-subtle); background: var(--header-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  }
+  .uz-nav .button { flex: 1 1 0; padding: 0 12px; }
+  .uz-nav .button.primary { flex: 2 1 0; }
+  .uz-done-head h2 { font-size: 23px; }
+  .uz-done-mark { width: 44px; height: 44px; font-size: 20px; }
+  .uz-done-actions .button { flex: 1 1 auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uz-flash, .uz-done-mark { animation: none; }
+  .uz-cta, .uz-stepper button::before { transition: none; }
+}
