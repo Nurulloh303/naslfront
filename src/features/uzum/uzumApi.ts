@@ -120,12 +120,18 @@ function cleanDraft(draft: UzumDraft): UzumDraft {
 
 const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
 
+export type UzumIkpu = { code: string; name: string; nameUz?: string; path: string; score?: number };
+
 export const uzumApi = {
   categories: (q: string, signal?: AbortSignal) =>
     call<{ categories: UzumCategory[] }>(`/api/uzum/categories?q=${encodeURIComponent(q)}`, { signal }).then((p) => p.categories ?? []),
   category: (id: number) => call<UzumCategoryDetail>(`/api/uzum/categories/${id}`),
   dictionary: (type: DictionaryType, q: string, signal?: AbortSignal) =>
     call<{ values: string[] }>(`/api/uzum/dictionary?type=${type}&q=${encodeURIComponent(q)}`, { signal }).then((p) => p.values ?? []),
+  ikpu: (params: { q?: string; title?: string; category?: string; barcode?: string; code?: string }, signal?: AbortSignal) => {
+    const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]);
+    return call<{ ready: boolean; results: UzumIkpu[] }>(`/api/uzum/ikpu?${query}`, { signal });
+  },
   prefill: (projectId: string) => call<{ draft: UzumPrefill }>(`/api/uzum/prefill?projectId=${encodeURIComponent(projectId)}`).then((p) => p.draft ?? {}),
   validate: (draft: UzumDraft) => call<{ ok: boolean; errors: UzumIssue[] }>("/api/uzum/validate", json({ draft: cleanDraft(draft) })),
   createExport: (draft: UzumDraft, idempotencyKey: string) =>

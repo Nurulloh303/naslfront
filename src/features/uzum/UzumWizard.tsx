@@ -7,6 +7,7 @@ import {
 } from "./draft";
 import { BilingualText, Combobox, Field, XlsmGlyph, apiMessage } from "./fields";
 import { ExportDone } from "./ExportDone";
+import { IkpuPicker } from "./IkpuPicker";
 import {
   UzumApiError, mediaUrl, uzumApi,
   type UzumCategory, type UzumCategoryDetail, type UzumDraft, type UzumExport, type UzumIssue, type UzumPhoto, type UzumSku,
@@ -231,7 +232,7 @@ export function UzumWizard({ projectId, projectName, onExit }: { projectId?: str
 
     <section className="uz-panel" aria-live="polite">
       {step === 0 && <StepCategory state={state} setState={setState} t={t} error={issueFor("categoryId")} onPicked={() => setIssues((list) => list.filter((issue) => issue.field !== "categoryId"))} />}
-      {step === 1 && <StepProduct draft={draft} ai={state.ai} patch={patch} issueFor={issueFor} t={t} loading={prefilling} />}
+      {step === 1 && <StepProduct draft={draft} category={state.category?.path || state.category?.title || ""} ai={state.ai} patch={patch} issueFor={issueFor} t={t} loading={prefilling} />}
       {step === 2 && <StepSkus draft={draft} patch={patch} setSku={setSku} issueFor={issueFor} t={t} />}
       {step === 3 && <StepPhotos state={state} setState={setState} patch={patch} t={t} error={issueFor("photos")} loading={prefilling} onConsent={() => { setStepError(""); setIssues((list) => list.filter((issue) => issue.field !== "photos.consent")); }} />}
       {step === 4 && <StepFilters draft={draft} detail={detail} error={detailError} patch={patch} issueFor={issueFor} t={t} />}
@@ -341,9 +342,9 @@ function StepHead({ title, lead }: { title: string; lead?: string }) {
 type Patch = (changes: Partial<UzumDraft>, touched?: { field: string; sku?: number }[]) => void;
 type IssueFor = (field: string, sku?: number) => string | undefined;
 
-function StepProduct({ draft, ai, patch, issueFor, t, loading }: { draft: UzumDraft; ai: Record<string, string>; patch: Patch; issueFor: IssueFor; t: T; loading: boolean }) {
+function StepProduct({ draft, category, ai, patch, issueFor, t, loading }: { draft: UzumDraft; category: string; ai: Record<string, string>; patch: Patch; issueFor: IssueFor; t: T; loading: boolean }) {
   const [ikpuBlurred, setIkpuBlurred] = useState(false);
-  const ikpuLocal = ikpuBlurred && draft.ikpu.length > 0 && draft.ikpu.length !== 16 ? t("uzum.product.ikpuInvalid", { n: draft.ikpu.length }) : undefined;
+  const ikpuLocal = ikpuBlurred && draft.ikpu.length > 0 && draft.ikpu.length !== 16 && draft.ikpu.length !== 17 ? t("uzum.product.ikpuInvalid", { n: draft.ikpu.length }) : undefined;
   const ikpuError = issueFor("ikpu") ?? ikpuLocal;
   const text = (base: "title" | "short" | "description" | "composition" | "care" | "sizeChart") => ({
     values: { ru: (draft[`${base}Ru`] as string | undefined) ?? "", uz: (draft[`${base}Uz`] as string | undefined) ?? "" },
@@ -374,12 +375,15 @@ function StepProduct({ draft, ai, patch, issueFor, t, loading }: { draft: UzumDr
       </Field>
       <Field id="uzf-ikpu" label={t("uzum.product.ikpu")} error={ikpuError}
         hint={<>{t("uzum.product.ikpuHint")} <a href="https://tasnif.soliq.uz/" target="_blank" rel="noopener noreferrer">{t("uzum.product.ikpuFind")} ↗</a></>}
-        counter={`${draft.ikpu.length}/16`}>
-        <input id="uzf-ikpu" className="uz-input uz-ikpu" inputMode="numeric" autoComplete="off" placeholder="0000000000000000"
+        counter={`${draft.ikpu.length}/17`}>
+        <input id="uzf-ikpu" className="uz-input uz-ikpu" inputMode="numeric" autoComplete="off" placeholder="00000000000000000"
           value={draft.ikpu} aria-invalid={ikpuError ? true : undefined} aria-describedby={ikpuError ? "uzf-ikpu-error" : "uzf-ikpu-hint"}
           onBlur={() => setIkpuBlurred(true)}
-          onChange={(event) => { setIkpuBlurred(false); patch({ ikpu: event.target.value.replace(/\D/g, "").slice(0, 16) }, [{ field: "ikpu" }]); }} />
+          onChange={(event) => { setIkpuBlurred(false); patch({ ikpu: event.target.value.replace(/\D/g, "").slice(0, 17) }, [{ field: "ikpu" }]); }} />
       </Field>
+      <IkpuPicker value={draft.ikpu} title={draft.titleRu || draft.titleUz || ""} category={category}
+        barcode={draft.skus.find((sku) => sku.barcode)?.barcode ?? ""} t={t}
+        onPick={(code) => patch({ ikpu: code }, [{ field: "ikpu" }])} />
     </div>
 
     <h3 className="uz-sub">{t("uzum.product.texts")} <small>{t("uzum.product.textsHint")}</small></h3>

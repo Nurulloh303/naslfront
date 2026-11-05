@@ -393,3 +393,11 @@ textarea.uz-input { min-height: 0; padding: 12px 14px; line-height: 1.55; resize
   .uz-flash, .uz-done-mark { animation: none; }
   .uz-cta, .uz-stepper button::before { transition: none; }
 }
+
+/* IKPU yordamchisi */
+.uz-ikpu-box { grid-column: 1 / -1; display: grid; gap: 8px; margin-top: -4px; }
+.uz-ikpu-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.uz-ikpu-actions .uz-input { flex: 1 1 240px; min-width: 0; }
+.uz-ikpu-list { max-height: 360px; overflow: auto; }
+.uz-ikpu-list code { font-size: 13px; letter-spacing: .06em; color: var(--accent); }
+.uz-ikpu-chosen { margin: 0; color: var(--success, #1f8a4c); font-size: 14px; }
