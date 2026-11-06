@@ -18,6 +18,9 @@ type Check = { status: "idle" | "checking" | "done" | "failed"; ok: boolean; mes
 
 const TEXT_KEYS = ["titleRu", "titleUz", "shortRu", "shortUz", "descriptionRu", "descriptionUz", "compositionRu", "compositionUz", "careRu", "careUz", "sizeChartRu", "sizeChartUz"] as const;
 const DRAFT_STRING_KEYS = ["brand", "model", "country", "ikpu", "groupKey", ...TEXT_KEYS] as const;
+/** Uzum importi narxni 1000 so'mga karrali qabul qiladi ("Значение цены не кратно 1000"). */
+const PRICE_STEP = 1000;
+const roundPrice = (value: number) => Math.max(PRICE_STEP, Math.round(value / PRICE_STEP) * PRICE_STEP);
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 
 
@@ -452,6 +455,12 @@ function StepSkus({ draft, patch, setSku, issueFor, t }: { draft: UzumDraft; pat
     <ol className="uz-skus">
       {skus.map((sku, index) => {
         const oldLow = sku.price !== null && sku.oldPrice !== null && sku.oldPrice < sku.price;
+        const notStep = (value: number | null) => value !== null && value > 0 && value % PRICE_STEP !== 0;
+        const stepMsg = (value: number | null) => notStep(value) ? t("uzum.skus.priceStep", { n: formatSom(roundPrice(value as number)) }) : undefined;
+        const fixPrices = () => setSku(index, {
+          ...(notStep(sku.price) ? { price: roundPrice(sku.price as number) } : {}),
+          ...(notStep(sku.oldPrice) ? { oldPrice: roundPrice(sku.oldPrice as number) } : {}),
+        });
         return <li className="uz-sku" key={index}>
           <div className="uz-sku-head">
             <h3>{t("uzum.skus.sku", { n: index + 1 })}{sku.color || sku.size ? <small>{[sku.color, sku.size].filter(Boolean).join(" / ")}</small> : null}</h3>
@@ -468,14 +477,15 @@ function StepSkus({ draft, patch, setSku, issueFor, t }: { draft: UzumDraft; pat
             <Field id={fieldDomId("size", index)} label={t("uzum.skus.size")} error={err("size", index)}>
               <Combobox id={fieldDomId("size", index)} type="size" value={sku.size ?? ""} placeholder={t("uzum.skus.sizePlaceholder")} invalid={Boolean(err("size", index))} describedBy={desc("size", index)} onChange={(value) => setSku(index, { size: value })} />
             </Field>
-            <Field id={fieldDomId("price", index)} label={t("uzum.skus.price")} error={err("price", index)}>
-              <NumberInput id={fieldDomId("price", index)} grouped suffix={t("uzum.skus.som")} value={sku.price} invalid={Boolean(err("price", index))} describedBy={desc("price", index)}
+            <Field id={fieldDomId("price", index)} label={t("uzum.skus.price")} error={err("price", index) ?? stepMsg(sku.price)} hint={t("uzum.skus.priceHint")}>
+              <NumberInput id={fieldDomId("price", index)} grouped suffix={t("uzum.skus.som")} value={sku.price} invalid={Boolean(err("price", index)) || notStep(sku.price)} describedBy={desc("price", index)}
                 onChange={(value) => setSku(index, { price: value, ...(sku.oldPrice === null || sku.oldPrice === sku.price ? { oldPrice: value } : {}) })} />
             </Field>
-            <Field id={fieldDomId("oldPrice", index)} label={t("uzum.skus.oldPrice")} error={err("oldPrice", index) ?? (oldLow ? t("uzum.skus.oldPriceLow") : undefined)} hint={t("uzum.skus.oldPriceHint")}>
-              <NumberInput id={fieldDomId("oldPrice", index)} grouped suffix={t("uzum.skus.som")} value={sku.oldPrice} invalid={Boolean(err("oldPrice", index)) || oldLow} describedBy={desc("oldPrice", index)} onChange={(value) => setSku(index, { oldPrice: value })} />
+            <Field id={fieldDomId("oldPrice", index)} label={t("uzum.skus.oldPrice")} error={err("oldPrice", index) ?? (oldLow ? t("uzum.skus.oldPriceLow") : stepMsg(sku.oldPrice))} hint={t("uzum.skus.oldPriceHint")}>
+              <NumberInput id={fieldDomId("oldPrice", index)} grouped suffix={t("uzum.skus.som")} value={sku.oldPrice} invalid={Boolean(err("oldPrice", index)) || oldLow || notStep(sku.oldPrice)} describedBy={desc("oldPrice", index)} onChange={(value) => setSku(index, { oldPrice: value })} />
             </Field>
           </div>
+          {(notStep(sku.price) || notStep(sku.oldPrice)) && <button type="button" className="uz-link" onClick={fixPrices}>{t("uzum.skus.priceRound")}</button>}
 
           <div className="uz-pack">
             <p className="uz-pack-title"><PackGlyph />{t("uzum.skus.pack")}</p>
