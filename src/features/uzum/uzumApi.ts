@@ -17,7 +17,7 @@ import { apiFetch, apiUrl } from "../../app/apiClient";
  * Naslai faylni faqat tayyorlaydi — tovarni Uzumga sotuvchi o'zi yuklaydi.
  */
 
-export type UzumCategory = { id: number; title: string; path: string };
+export type UzumCategory = { id: number; title: string; path: string; titleUz?: string; pathUz?: string; commission?: number | null };
 export type UzumFilter = { id: string | number; name: string; values: string[]; multiple: boolean; required: boolean };
 export type UzumCategoryDetail = UzumCategory & { filters: UzumFilter[] };
 export type DictionaryType = "brand" | "color" | "size" | "country";

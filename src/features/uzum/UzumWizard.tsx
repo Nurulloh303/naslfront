@@ -270,6 +270,10 @@ function StepCategory({ state, setState, t, error, onPicked }: {
   const [failure, setFailure] = useState("");
   const [searching, setSearching] = useState(!state.category);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { language } = useLanguage();
+  const uz = language !== "ru";
+  const nameOf = (category: UzumCategory) => (uz && category.titleUz) || category.title;
+  const pathOf = (category: UzumCategory) => (uz && category.pathUz) || category.path || category.title;
 
   useEffect(() => {
     const q = query.trim();
@@ -307,7 +311,7 @@ function StepCategory({ state, setState, t, error, onPicked }: {
 
     {state.category && !searching && <div className="uz-chosen uz-flashable" id="uzf-categoryId" tabIndex={-1}>
       <small>{t("uzum.category.selected")}</small>
-      <ol className="uz-crumbs">{crumbs(state.category.path || state.category.title).map((part, index, all) => <li key={`${part}-${index}`} className={index === all.length - 1 ? "is-last" : ""}>{part}</li>)}</ol>
+      <ol className="uz-crumbs">{crumbs(pathOf(state.category)).map((part, index, all) => <li key={`${part}-${index}`} className={index === all.length - 1 ? "is-last" : ""}>{part}</li>)}</ol>
       <button type="button" className="button secondary" onClick={change}>{t("uzum.category.change")}</button>
     </div>}
 
@@ -321,12 +325,13 @@ function StepCategory({ state, setState, t, error, onPicked }: {
       {results && results.length > 0 && <ul className="uz-catlist">
         {results.map((category) => <li key={category.id}>
           <button type="button" aria-pressed={state.draft.categoryId === category.id} onClick={() => pick(category)}>
-            <b>{category.title}</b>
-            <span>{crumbs(category.path).slice(0, -1).join(" › ") || category.path}</span>
+            <b>{nameOf(category)}{category.commission != null && <em className="uz-commission">{t("uzum.category.commission", { n: category.commission })}</em>}</b>
+            {uz && category.titleUz && category.titleUz !== category.title && <small className="uz-cat-ru">{category.title}</small>}
+            <span>{crumbs(pathOf(category)).slice(0, -1).join(" › ") || pathOf(category)}</span>
           </button>
         </li>)}
       </ul>}
-      {state.category && <button type="button" className="uz-link" onClick={() => setSearching(false)}>← {state.category.title}</button>}
+      {state.category && <button type="button" className="uz-link" onClick={() => setSearching(false)}>← {nameOf(state.category)}</button>}
     </div>}
   </>;
 }
