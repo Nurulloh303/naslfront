@@ -42,8 +42,9 @@ export function AiBadge() {
  * saqlanmaydi: yozilgan matn — bu qidiruv, qiymat esa ro'yxatdan tanlanganda
  * o'zgaradi. Fokus yo'qolsa, kiritilgan qidiruv bekor bo'ladi.
  */
-export function Combobox({ id, type, value, onChange, placeholder, quick, invalid, describedBy }: {
+export function Combobox({ id, type, value, onChange, placeholder, quick, invalid, describedBy, categoryId }: {
   id: string;
+  categoryId?: number | null;
   type: DictionaryType;
   value: string;
   onChange: (value: string) => void;
@@ -66,13 +67,13 @@ export function Combobox({ id, type, value, onChange, placeholder, quick, invali
     const controller = new AbortController();
     setLoading(true);
     const timer = window.setTimeout(() => {
-      uzumApi.dictionary(type, query.trim(), controller.signal)
+      uzumApi.dictionary(type, query.trim(), controller.signal, categoryId)
         .then((values) => { setItems(values.slice(0, 40)); setActive(values.length ? 0 : -1); })
         .catch(() => { if (!controller.signal.aborted) setItems([]); })
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 250);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [open, query, type]);
+  }, [open, query, type, categoryId]);
 
   const choose = (next: string) => {
     onChange(next);

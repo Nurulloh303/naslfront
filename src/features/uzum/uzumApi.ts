@@ -19,7 +19,7 @@ import { apiFetch, apiUrl } from "../../app/apiClient";
 
 export type UzumCategory = { id: number; title: string; path: string; titleUz?: string; pathUz?: string; commission?: number | null };
 export type UzumFilter = { id: string | number; name: string; values: string[]; multiple: boolean; required: boolean };
-export type UzumCategoryDetail = UzumCategory & { filters: UzumFilter[] };
+export type UzumCategoryDetail = UzumCategory & { filters: UzumFilter[]; sizeTypes?: string[] };
 export type DictionaryType = "brand" | "color" | "size" | "country";
 
 export type UzumPhoto = { jobId: string; resultIndex: number } | { dataUrl: string };
@@ -126,8 +126,8 @@ export const uzumApi = {
   categories: (q: string, signal?: AbortSignal) =>
     call<{ categories: UzumCategory[] }>(`/api/uzum/categories?q=${encodeURIComponent(q)}`, { signal }).then((p) => p.categories ?? []),
   category: (id: number) => call<UzumCategoryDetail>(`/api/uzum/categories/${id}`),
-  dictionary: (type: DictionaryType, q: string, signal?: AbortSignal) =>
-    call<{ values: string[] }>(`/api/uzum/dictionary?type=${type}&q=${encodeURIComponent(q)}`, { signal }).then((p) => p.values ?? []),
+  dictionary: (type: DictionaryType, q: string, signal?: AbortSignal, categoryId?: number | null) =>
+    call<{ values: string[] }>(`/api/uzum/dictionary?type=${type}&q=${encodeURIComponent(q)}${categoryId ? `&categoryId=${categoryId}` : ""}`, { signal }).then((p) => p.values ?? []),
   ikpu: (params: { q?: string; title?: string; category?: string; barcode?: string; code?: string }, signal?: AbortSignal) => {
     const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]);
     return call<{ ready: boolean; results: UzumIkpu[] }>(`/api/uzum/ikpu?${query}`, { signal });

@@ -94,7 +94,7 @@ export function UzumWizard({ projectId, projectName, onExit }: { projectId?: str
       .then((payload) => {
         if (!alive) return;
         setDetail(payload);
-        setState((current) => current.category?.id === id ? current : { ...current, category: { id, title: payload.title, path: payload.path } });
+        setState((current) => current.category?.id === id ? current : { ...current, category: { id, title: payload.title, path: payload.path, titleUz: payload.titleUz, pathUz: payload.pathUz, commission: payload.commission } });
       })
       .catch((reason) => { if (alive) setDetailError(apiMessage(reason, t, "uzum.filters.loadFailed")); });
     return () => { alive = false; };
@@ -236,7 +236,7 @@ export function UzumWizard({ projectId, projectName, onExit }: { projectId?: str
     <section className="uz-panel" aria-live="polite">
       {step === 0 && <StepCategory state={state} setState={setState} t={t} error={issueFor("categoryId")} onPicked={() => setIssues((list) => list.filter((issue) => issue.field !== "categoryId"))} />}
       {step === 1 && <StepProduct draft={draft} category={state.category?.path || state.category?.title || ""} ai={state.ai} patch={patch} issueFor={issueFor} t={t} loading={prefilling} />}
-      {step === 2 && <StepSkus draft={draft} patch={patch} setSku={setSku} issueFor={issueFor} t={t} />}
+      {step === 2 && <StepSkus draft={draft} sizeTypes={detail?.id === draft.categoryId ? detail?.sizeTypes : undefined} patch={patch} setSku={setSku} issueFor={issueFor} t={t} />}
       {step === 3 && <StepPhotos state={state} setState={setState} patch={patch} t={t} error={issueFor("photos")} loading={prefilling} onConsent={() => { setStepError(""); setIssues((list) => list.filter((issue) => issue.field !== "photos.consent")); }} />}
       {step === 4 && <StepFilters draft={draft} detail={detail} error={detailError} patch={patch} issueFor={issueFor} t={t} />}
       {step === 5 && <StepReview state={state} issues={issues} check={check} exporting={exporting} onCheck={() => void runCheck()} onFix={fix} onPrepare={() => void prepare()} t={t} />}
@@ -425,7 +425,7 @@ function NumberInput({ id, value, onChange, suffix, grouped, invalid, describedB
 
 const DIM_KEYS = ["weightG", "heightMm", "widthMm", "lengthMm"] as const;
 
-function StepSkus({ draft, patch, setSku, issueFor, t }: { draft: UzumDraft; patch: Patch; setSku: (index: number, changes: Partial<UzumSku>) => void; issueFor: IssueFor; t: T }) {
+function StepSkus({ draft, sizeTypes, patch, setSku, issueFor, t }: { draft: UzumDraft; sizeTypes?: string[]; patch: Patch; setSku: (index: number, changes: Partial<UzumSku>) => void; issueFor: IssueFor; t: T }) {
   const [applied, setApplied] = useState<number | null>(null);
   const skus = draft.skus;
 
@@ -455,6 +455,7 @@ function StepSkus({ draft, patch, setSku, issueFor, t }: { draft: UzumDraft; pat
     <ol className="uz-skus">
       {skus.map((sku, index) => {
         const oldLow = sku.price !== null && sku.oldPrice !== null && sku.oldPrice < sku.price;
+        const noSizes = sizeTypes !== undefined && sizeTypes.length === 0;
         const notStep = (value: number | null) => value !== null && value > 0 && value % PRICE_STEP !== 0;
         const stepMsg = (value: number | null) => notStep(value) ? t("uzum.skus.priceStep", { n: formatSom(roundPrice(value as number)) }) : undefined;
         const fixPrices = () => setSku(index, {
@@ -474,9 +475,13 @@ function StepSkus({ draft, patch, setSku, issueFor, t }: { draft: UzumDraft; pat
             <Field id={fieldDomId("color", index)} label={t("uzum.skus.color")} error={err("color", index)}>
               <Combobox id={fieldDomId("color", index)} type="color" value={sku.color ?? ""} invalid={Boolean(err("color", index))} describedBy={desc("color", index)} onChange={(value) => setSku(index, { color: value })} />
             </Field>
-            <Field id={fieldDomId("size", index)} label={t("uzum.skus.size")} error={err("size", index)}>
-              <Combobox id={fieldDomId("size", index)} type="size" value={sku.size ?? ""} placeholder={t("uzum.skus.sizePlaceholder")} invalid={Boolean(err("size", index))} describedBy={desc("size", index)} onChange={(value) => setSku(index, { size: value })} />
-            </Field>
+            {noSizes && !sku.size
+              ? <Field id={fieldDomId("size", index)} label={t("uzum.skus.size")} hint={t("uzum.skus.noSizes")}>
+                <input id={fieldDomId("size", index)} className="uz-input" disabled value="" placeholder="—" />
+              </Field>
+              : <Field id={fieldDomId("size", index)} label={t("uzum.skus.size")} error={err("size", index) ?? (noSizes ? t("uzum.skus.noSizesClear") : undefined)}>
+                <Combobox id={fieldDomId("size", index)} type="size" categoryId={draft.categoryId} value={sku.size ?? ""} placeholder={t("uzum.skus.sizePlaceholder")} invalid={Boolean(err("size", index)) || noSizes} describedBy={desc("size", index)} onChange={(value) => setSku(index, { size: value })} />
+              </Field>}
             <Field id={fieldDomId("price", index)} label={t("uzum.skus.price")} error={err("price", index) ?? stepMsg(sku.price)} hint={t("uzum.skus.priceHint")}>
               <NumberInput id={fieldDomId("price", index)} grouped suffix={t("uzum.skus.som")} value={sku.price} invalid={Boolean(err("price", index)) || notStep(sku.price)} describedBy={desc("price", index)}
                 onChange={(value) => setSku(index, { price: value, ...(sku.oldPrice === null || sku.oldPrice === sku.price ? { oldPrice: value } : {}) })} />
