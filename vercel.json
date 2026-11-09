@@ -1,7 +1,26 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "redirects": [
-    { "source": "/admin", "destination": "https://api.naslai.uz/admin/", "permanent": false },
-    { "source": "/admin/:path*", "destination": "https://api.naslai.uz/admin/:path*", "permanent": false }
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.naslai.uz"
+        }
+      ],
+      "destination": "https://naslai.uz/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/admin",
+      "destination": "https://api.naslai.uz/admin/",
+      "permanent": false
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "https://api.naslai.uz/admin/:path*",
+      "permanent": false
+    }
   ]
 }
