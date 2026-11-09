@@ -7,6 +7,8 @@ import { AuditPage } from "./cabinet/AuditPage";
 import { ListingPage } from "./cabinet/ListingPage";
 import { ResizePage } from "../features/resize/ResizePage";
 import { UzumPage } from "../features/uzum/UzumPage";
+import { UzumComingSoon } from "../features/uzum/UzumComingSoon";
+import { UZUM_EXPORT_ENABLED } from "../features/uzum/flags";
 import { AdminPage } from "./admin/AdminPage";
 import { BrandMark } from "./BrandMark";
 import { WelcomeTour } from "./onboarding/WelcomeTour";
@@ -70,7 +72,7 @@ function AppContent() {
     : route === "audit" ? <AuditPage onNavigate={navigate} onLogout={signOut} />
     : route === "listing" ? <ListingPage onNavigate={navigate} onLogout={signOut} />
     : route === "resize" ? <ResizePage onNavigate={navigate} onLogout={signOut} />
-    : route === "uzum" ? <UzumPage onNavigate={navigate} onLogout={signOut} />
+    : route === "uzum" ? (UZUM_EXPORT_ENABLED || account.isAdmin ? <UzumPage onNavigate={navigate} onLogout={signOut} /> : <UzumComingSoon onNavigate={navigate} onLogout={signOut} />)
     : route === "admin" ? <AdminPage onNavigate={navigate} onLogout={signOut} />
     : <ApiPage onNavigate={navigate} onLogout={signOut} />;
 

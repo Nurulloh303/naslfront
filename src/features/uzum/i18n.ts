@@ -5,6 +5,11 @@ export const uzumUz = {
   title: "Uzum uchun Excel",
   lead: "Mahsulotni Uzum import fayliga (.xlsm) joylaymiz. Faylni Uzum Seller kabinetiga o‘zingiz yuklaysiz.",
   open: "Uzum uchun Excel",
+  soon: "Uzum uchun Excel fayl tayyorlash tez kunda ishga tushadi.",
+  soonBadge: "Tez kunda",
+  soonTitle: "Uzum uchun Excel — tez kunda",
+  soonText: "Bu bo‘lim ustida ishlayapmiz: mahsulotingiz kartasidan Uzum’ga yuklanadigan tayyor Excel fayl. Tez orada ochiladi.",
+  soonBack: "Bosh sahifaga",
   home: {
     startTitle: "Yangi fayl",
     fromProject: "Loyihadan boshlash",
@@ -219,6 +224,11 @@ export const uzumRu: typeof uzumUz = {
   title: "Excel для Uzum",
   lead: "Соберём товар в файл импорта Uzum (.xlsm). Файл в кабинет Uzum Seller вы загружаете сами.",
   open: "Excel для Uzum",
+  soon: "Подготовка Excel-файла для Uzum скоро заработает.",
+  soonBadge: "Скоро",
+  soonTitle: "Excel для Uzum — скоро",
+  soonText: "Мы дорабатываем этот раздел: готовый Excel-файл для загрузки в Uzum прямо из карточки товара. Скоро откроем.",
+  soonBack: "На главную",
   home: {
     startTitle: "Новый файл",
     fromProject: "Начать с проекта",

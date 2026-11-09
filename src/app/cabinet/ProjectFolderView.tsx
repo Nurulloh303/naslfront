@@ -1,3 +1,4 @@
+import { UZUM_EXPORT_ENABLED } from "../../features/uzum/flags";
 import { useEffect, useState } from "react";
 import { accountApi, type ProductListing, type ProjectFolder } from "../account/accountApi";
 import { useLanguage } from "../../i18n/LanguageContext";
@@ -68,7 +69,7 @@ export function ProjectFolderView({ id, onClose, onDeleted }: { id: string; onCl
       </div>
       <div className="folder-bar-actions">
         <a className="button primary" href={folder.archiveUrl} download>{t("cabinet.folder.downloadAll")}</a>
-        {folder.contentType !== "resize" && folder.marketplace !== "Video" ? <a className="button secondary uz-open-btn" href={`#uzum?project=${encodeURIComponent(folder.id)}`}>{t("uzum.open")}</a> : null}
+        {folder.contentType !== "resize" && folder.marketplace !== "Video" ? (UZUM_EXPORT_ENABLED ? <a className="button secondary uz-open-btn" href={`#uzum?project=${encodeURIComponent(folder.id)}`}>{t("uzum.open")}</a> : <span className="button secondary uz-open-btn is-soon" aria-disabled="true" title={t("uzum.soon")}>{t("uzum.open")}<span className="uz-soon-badge">{t("uzum.soonBadge")}</span></span>) : null}
         <button type="button" className="button secondary is-danger" disabled={busy} onClick={() => void remove()}>{t("cabinet.projects.delete")}</button>
       </div>
     </div>
